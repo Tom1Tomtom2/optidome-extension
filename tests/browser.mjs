@@ -1,10 +1,10 @@
 import { chromium } from 'playwright-core';
 import { resolve } from 'node:path';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, mkdtemp } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const extension = resolve('dist');
 await mkdir('test-results', { recursive: true });
-const context = await chromium.launchPersistentContext(resolve('test-results/profile'), {
+const context = await chromium.launchPersistentContext(await mkdtemp(resolve('test-results/analysis-profile-')), {
   executablePath: process.env.CHROMIUM_PATH || chromium.executablePath(),
   headless: true,
   args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--lang=fr'],
@@ -25,15 +25,13 @@ try {
   await source.locator('#prompt-textarea').fill(draft);
   await source.waitForTimeout(500);
   assert.equal(source.workers().length, 0, 'No model while typing');
-  const opened = context.waitForEvent('page');
-  await source.mouse.click(850, 716); // Native click into closed shadow root.
-  const page = await opened;
-  await page.waitForLoadState('domcontentloaded');
+  // Standalone analyser regression: provider imports and the new coach are
+  // exercised separately in coach.browser.mjs.
+  const page=await context.newPage();
+  await page.goto(`chrome-extension://${id}/analyse/index.html`);
   await page.waitForSelector('#draft');
-  for (let i = 0; i < 50 && !(await page.locator('#draft').inputValue()); i++) await page.waitForTimeout(100);
-  if (!(await page.locator('#draft').inputValue())) console.log('Import state:', page.url(), await page.locator('#snapshot').textContent(), errors);
-  assert.equal(await page.locator('#draft').inputValue(), draft);
-  assert.equal(page.workers().length, 0, 'Opening does not start inference');
+  await page.locator('#draft').fill(draft);
+  assert.equal(page.workers().length,0,'Opening does not start inference');
   const before = await sw.evaluate(() => chrome.storage.local.get(null));
   const start = performance.now();
   await page.locator('#analyse').click();

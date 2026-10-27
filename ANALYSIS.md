@@ -1,3 +1,5 @@
+> Version 0.7 : l’interface et les demandes longues sont décrites dans [COACH.md](COACH.md). Les notes ci-dessous décrivent le prototype 0.6 et son analyse complète limitée à 128 tokens.
+
 # Optional local analysis — experimental prototype
 
 Version 0.6.0 merges the optional local analyser with the multi-provider work

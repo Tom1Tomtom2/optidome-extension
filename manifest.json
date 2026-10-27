@@ -4,7 +4,7 @@
   "short_name": "optidome",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self'; worker-src 'self'"
   },
@@ -15,12 +15,22 @@
     "128": "icons/icon-128.png"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "sidePanel"
   ],
   "content_scripts": [
     {
-      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*", "https://claude.ai/*", "https://gemini.google.com/*", "https://chat.mistral.ai/*"],
-      "js": ["analyse/providers.js", "analyse/launcher.js"],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://chat.mistral.ai/*"
+      ],
+      "js": [
+        "analyse/providers.js",
+        "analyse/launcher.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -77,5 +87,9 @@
       "48": "icons/icon-48.png"
     },
     "default_popup": "popup.html"
+  },
+  "minimum_chrome_version": "116",
+  "side_panel": {
+    "default_path": "popup.html"
   }
 }

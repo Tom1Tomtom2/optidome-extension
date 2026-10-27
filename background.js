@@ -1,15 +1,12 @@
 "use strict";
 
-importScripts('analyse/providers.js', 'analyse/background.js');
+importScripts('usage.js', 'analyse/providers.js', 'analyse/background.js');
 
 // Service worker. It receives numbers, keeps the registry of conversations,
 // and updates the daily journal. It never sees any text.
 //
-// The key calculation lives here. On every turn, the site sends the model the
-// whole history of the conversation, and pays for it again. The input billed
-// at turn k is therefore everything already exchanged, plus the message just
-// typed. That is why the cost of a conversation grows with the square of its
-// length, and that is what the registry below rebuilds.
+// Approximate accumulated history: actual providers can cache, compact, truncate
+// or branch it. The cost UI presents reference scenarios, never a measured bill.
 
 const DAYS_KEPT = 90;
 
@@ -24,6 +21,9 @@ let queue = Promise.resolve();
 
 chrome.runtime.onMessage.addListener((measure, sender) => {
   if (measure?.source !== "optidome-measure") return;
+  if (sender.id !== chrome.runtime.id || !OptidomeProviders.forUrl(sender.url)) return;
+  if (!OptidomeProviders.definitions.some(p => p.id === measure.provider) ||
+      ![measure.tokensSent, measure.tokensReceived].every(n => Number.isFinite(n) && n >= 0 && n < 1e8)) return;
   queue = queue
     .then(() => record(measure))
     .then((tip) => {
@@ -40,8 +40,9 @@ chrome.runtime.onMessage.addListener((measure, sender) => {
 
 // Returns the tip to show after this send, or null.
 async function record(measure) {
-  const { registry = {}, journal = {}, lastThanks = 0 } = await chrome.storage.local.get([
+  const { registry = {}, journal = {}, activity = {}, lastThanks = 0 } = await chrome.storage.local.get([
     "registry",
+    "activity",
     "journal",
     "lastThanks",
   ]);
@@ -56,6 +57,16 @@ async function record(measure) {
     seenOn: null,
   };
 
+  // Daily membership is recorded separately: last-seen dates cannot reconstruct
+  // historical conversation counts. Existing journal days remain unknown.
+  const dayKey = today();
+  const entry = activity[dayKey] ?? { conversations: {}, complete: !journal[dayKey] };
+  if (measure.conversation) {
+    const ids = entry.conversations[measure.provider] ?? [];
+    if (!ids.includes(measure.conversation)) ids.push(measure.conversation);
+    entry.conversations[measure.provider] = ids;
+  }
+  activity[dayKey] = entry;
   const alreadyReread = tracked.total;
   const billedInput = tracked.total + measure.tokensSent;
   const output = measure.tokensReceived;
@@ -78,7 +89,8 @@ async function record(measure) {
 
   const day = journal[tracked.seenOn] ?? {};
   const byProvider = day[measure.provider] ?? {};
-  const totals = byProvider[measure.model] ?? {
+  const modelKey = typeof measure.model === "string" && !["__proto__","constructor","prototype"].includes(measure.model) ? measure.model : "unknown";
+  const totals = (Object.hasOwn(byProvider,modelKey) ? byProvider[modelKey] : null) ?? {
     typed: 0, // what the person actually wrote
     billed: 0, // what was sent to the model, history included
     output: 0,
@@ -94,12 +106,13 @@ async function record(measure) {
   if (billedInput > LONG_CONVERSATION_THRESHOLD) totals.longTurns += 1;
   if (!tracked.complete) totals.incompleteConversations += 1;
 
-  byProvider[measure.model] = totals;
+  byProvider[modelKey] = totals;
   day[measure.provider] = byProvider;
   journal[tracked.seenOn] = day;
 
   await chrome.storage.local.set({
     registry: prune(registry),
+    activity,
     journal: journal,
     lastThanks: thanksShown,
   });
@@ -107,7 +120,7 @@ async function record(measure) {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return Usage.dateKey();
 }
 
 // A conversation left alone for three months will never be picked up again:
@@ -120,3 +133,19 @@ function prune(registry) {
   }
   return kept;
 }
+
+// All writes to the journal (including reset) are ordered in this worker.
+chrome.runtime.onMessage.addListener((message, sender, respond) => {
+  if(sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) return;
+  if(message?.type !== 'optidome-reset' && message?.type !== 'optidome-observe-day') return;
+  queue = queue.then(async () => {
+    if(message.type === 'optidome-reset') await chrome.storage.local.clear();
+    else {
+      const {activity={},journal={}} = await chrome.storage.local.get(['activity','journal']);
+      activity[today()] ??= {conversations:{},complete:!journal[today()]};
+      await chrome.storage.local.set({activity});
+    }
+    respond({ok:true});
+  }).catch(error=>{console.warn("[optidome] storage operation failed", error);respond({ok:false});});
+  return true;
+});

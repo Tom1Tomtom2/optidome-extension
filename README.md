@@ -1,3 +1,7 @@
+# Optidome 0.7
+
+Nouvelle interface : suivi quotidien, coût API estimé, conseils, apprentissage et paramètres. Voir [COACH.md](COACH.md) pour les choix, limites et validations.
+
 # optidome: use your AI better
 
 A free, open source Chrome extension. It gives you tips while you use

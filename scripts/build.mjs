@@ -13,8 +13,8 @@ await mkdir('dist/analyse', { recursive: true });
 for (const file of await readdir('.')) {
   if (/\.(js|html|json)$/.test(file) && !file.endsWith('.check.js') && !['package.json', 'package-lock.json'].includes(file)) await cp(file, `dist/${file}`);
 }
-for (const dir of ['icons', 'fonts', '_locales', 'models']) await cp(dir, `dist/${dir}`, { recursive: true });
-for (const file of ['index.html', 'style.css', 'page.mjs', 'policy.mjs', 'providers.js', 'launcher.js', 'background.js']) await cp(`analyse/${file}`, `dist/analyse/${file}`);
+for (const dir of ['icons', 'fonts', '_locales', 'models', 'coach']) await cp(dir, `dist/${dir}`, { recursive: true });
+for (const file of ['index.html', 'style.css', 'page.mjs', 'controller.mjs', 'policy.mjs', 'providers.js', 'launcher.js', 'background.js']) await cp(`analyse/${file}`, `dist/analyse/${file}`);
 await build({ entryPoints: ['analyse/worker.mjs'], outfile: 'dist/analyse/worker.js', bundle: true, platform: 'browser', format: 'esm', minify: true, legalComments: 'eof' });
 await mkdir('dist/vendor', { recursive: true });
 for (const file of await readdir('node_modules/onnxruntime-web/dist')) {

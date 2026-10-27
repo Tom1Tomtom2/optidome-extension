@@ -72,3 +72,13 @@ export function decide(text, embedding, referenceVectors) {
   if (ranked[0].level === 'quick' && notes.includes('stakes')) return { level: null, reason: 'stakes', notes };
   return { level: ranked[0].level, reason: ranked[0].level, notes };
 }
+
+// Excerpts cannot establish that the omitted middle is easy. Never downgrade
+// to quick from a partial reading; abstain on disagreement or sensitive stakes.
+export function combineExcerpts(results, notes=[]) {
+  const merged=[...new Set([...notes,...results.flatMap(r=>r.notes||[])])];
+  const level=results[0]?.level;
+  if(results.length!==2 || !level || level==='quick' || merged.includes('stakes') || results.some(r=>r.level!==level))
+    return {level:null,reason:'partial',notes:merged};
+  return {level,reason:level,notes:merged};
+}

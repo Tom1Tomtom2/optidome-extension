@@ -17,6 +17,9 @@
   // ChatGPT and Gemini mark their box as a textbox; Claude and Le Chat use a
   // ProseMirror editor without that role.
   const BOX = '[contenteditable="true"][role="textbox"], .ProseMirror[contenteditable="true"], textarea';
+  let privacyAlerts=true, tipsMode='manual';
+  chrome.storage.local.get(['privacyAlerts','tipsMode']).then(v=>{privacyAlerts=v.privacyAlerts!==false;tipsMode=v.tipsMode||'manual';});
+  chrome.storage.onChanged.addListener((changes,area)=>{if(area!=='local')return;if(changes.privacyAlerts)privacyAlerts=changes.privacyAlerts.newValue!==false;if(changes.tipsMode)tipsMode=changes.tipsMode.newValue||'manual';if(displayed)hide();});
   const PAUSE_MS = 1000;
   const PASTE_MIN = 2000;
   const DAY_MS = 86400000;
@@ -349,6 +352,7 @@
   async function show(id, values = {}, origin = "send") {
     followConversation();
     if (!CARDS[id]) return;
+    if (['key','data'].includes(id) ? !privacyAlerts : tipsMode !== 'occasional') return;
     const content = CARDS[id](values);
     if (!content.free) {
       if (shown.size > 0) return; // one tip per conversation
@@ -464,6 +468,7 @@
       clearTimeout(timer);
       timer = setTimeout(() => {
         try {
+          if (!privacyAlerts && tipsMode !== "occasional") return;
           const tip = TipRules.tipForDraft(readBox(box));
           if (tip) show(tip.id, tip, "draft");
         } catch (error) {
@@ -513,7 +518,7 @@
   // --- Only once, on the first visit -----------------------------------------
 
   setTimeout(async () => {
-    if (displayed || (await load("trainingShown", false))) return;
+    if (tipsMode !== "occasional" || displayed || (await load("trainingShown", false))) return;
     await save("trainingShown", true);
     show("training", {}, "welcome");
   }, 4000);
