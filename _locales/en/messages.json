@@ -36,7 +36,6 @@
   "trainingTitle": { "message": "Your conversations may train $1" },
   "trainingText_chatgpt": { "message": "Check conversation-use settings in your account. Rules depend on your account and subscription." },
   "trainingText": { "message": "Check conversation-use settings in $1. Rules depend on your account and subscription." },
-  "trainingNote": { "message": "optidome processes messages locally. Your assistant’s website also has access to its input field." },
   "newConvTitle": { "message": "New conversation, well done" },
   "newConvText": { "message": "A new chat avoids carrying the old history. Keep useful information if you are continuing the same work." },
   "wellDone": { "message": "Well done" },

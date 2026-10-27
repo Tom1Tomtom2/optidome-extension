@@ -145,7 +145,6 @@
       title: t("trainingTitle", SITE),
       text: SITE === "ChatGPT" ? t("trainingText_chatgpt") : t("trainingText", SITE),
       primary: [t("gotIt"), "close"],
-      note: t("trainingNote"),
     }),
     habit: ({ title, text, count }) => ({
       free: true,

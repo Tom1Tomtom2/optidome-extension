@@ -36,7 +36,6 @@
   "trainingTitle": { "message": "Vos conversations peuvent entraîner $1" },
   "trainingText_chatgpt": { "message": "Vérifiez les options d’utilisation des conversations dans les paramètres de votre compte. Les règles dépendent de votre compte et de votre abonnement." },
   "trainingText": { "message": "Vérifiez les options d’utilisation des conversations dans les paramètres de $1. Les règles dépendent de votre compte et de votre abonnement." },
-  "trainingNote": { "message": "optidome traite vos messages localement. Le site de votre assistant a également accès à son champ de saisie." },
   "newConvTitle": { "message": "Nouvelle conversation, bien vu" },
   "newConvText": { "message": "Un nouveau chat évite de reprendre l’ancien historique. Conservez les informations utiles si vous poursuivez le même travail." },
   "wellDone": { "message": "Bien vu" },
