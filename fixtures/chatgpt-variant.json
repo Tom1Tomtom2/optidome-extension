@@ -1,0 +1,21 @@
+{
+  "seen": "Rebuilt, not captured, like chatgpt-reason.json. Checks \"Try again\" (action variant), which sends no new text and names the model.",
+  "url": "https://chatgpt.com/backend-api/f/conversation",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "{\"action\": \"variant\", \"messages\": [], \"model\": \"gpt-6\", \"conversation_id\": \"6720b1c4-0000-4000-8000-000000000001\", \"parent_message_id\": \"m1\", \"regeneration_source\": \"try_again\"}",
+  "response": "data: {\"v\": {\"message\": {\"author\": {\"role\": \"assistant\"}, \"content\": {\"content_type\": \"text\", \"parts\": [\"C'est\"]}}}, \"c\": 0}\n\ndata: {\"o\": \"patch\", \"v\": [{\"p\": \"/message/content/parts/0\", \"o\": \"append\", \"v\": \" Rome.\"}]}\n\ndata: {\"conversation_id\": \"6720b1c4-0000-4000-8000-000000000001\"}\n\ndata: [DONE]\n\n",
+  "expect": {
+    "provider": "chatgpt",
+    "model": "gpt-6",
+    "conversation": "6720b1c4-0000-4000-8000-000000000001",
+    "firstTurn": false,
+    "sentText": "",
+    "answer": "C'est Rome.",
+    "justThanks": false,
+    "followUpFix": false,
+    "deep": false,
+    "regenerated": true
+  }
+}

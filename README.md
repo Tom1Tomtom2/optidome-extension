@@ -1,11 +1,7 @@
-# Optidome 0.7
-
-Nouvelle interface : suivi quotidien, coût API estimé, conseils, apprentissage et paramètres. Voir [COACH.md](COACH.md) pour les choix, limites et validations.
-
 # optidome: use your AI better
 
 A free, open source Chrome extension. It gives you tips while you use
-ChatGPT, Claude, Gemini or Le Chat, and a grade from A to E every month.
+ChatGPT, Claude, Gemini or Le Chat, and a summary of your month.
 
 **Nothing leaves your browser.** The extension talks to no server, not even
 optidome's. The text of your conversations is read on the spot, then
@@ -13,15 +9,6 @@ forgotten. It only keeps numbers, in Chrome's storage.
 
 It works on chatgpt.com, claude.ai, gemini.google.com and chat.mistral.ai.
 It speaks English and French, and follows the language of your browser.
-
-An **optional experimental local request analyser** is available on all four
-assistants (including the legacy chat.openai.com address). Click
-“Choose a reasoning level”, review the copied draft, then click “Analyse on
-this computer”. It suggests a broad reasoning level or abstains. It never
-runs automatically, changes the chat, or selects a model for you. See
-[ANALYSIS.md](ANALYSIS.md) for limitations, build instructions and the audit.
-The built package includes MiniLM and runs offline; the source repository
-does not include the model weights or compiled runtime.
 
 ---
 
@@ -40,40 +27,29 @@ When it can, a button does the work for you.
 | paste a long text already present earlier in the conversation | referring to it, instead of having it reread twice |
 | keep going in a conversation that has become very long | preparing a summary to start over in a new conversation |
 | send "thank you" on its own | nothing serious, but the AI reread the whole conversation to answer you |
+| send a one-line question with deep reasoning on (ChatGPT, Le Chat) | the quick mode, which answers as well and faster |
+| redo the same answer three times (ChatGPT) | saying what is wrong with it instead |
+| answer "no", "shorter" or "try again" | saying the format you want from the first request |
 | just installed the extension | checking whether your conversations are used to train the AI |
 
 Your draft is never sent or changed unless you click.
 
-### A grade for the month, from A to E
+### The popup
 
-The grade measures one thing: the share of your messages sent in a
-conversation that is too long.
+One screen, in three parts:
 
-To answer you, the AI rereads the whole conversation from the start, with
-every message. A message sent at the end of a long conversation therefore
-takes much more work than a message sent in a new one. The extension
-considers a conversation too long when the AI has to reread more than
-30,000 tokens (about sixty pages of ordinary text) to answer.
+- **To do now**: your longest conversation of the week, opened in one click
+  to prepare a summary, and the number of one-line questions sent with deep
+  reasoning over the last seven days.
+- **Your good habits**: sensitive data removed before sending, new
+  conversations started at the right time.
+- **The month in figures**: messages, conversations, assistants, and what
+  they would have cost a company that pays for AI by usage. It is an order
+  of magnitude, calculated from the public price of each assistant's default
+  model (gpt-6.1-sol, Claude Sonnet 5.5, Gemini 3.8 Flash, Mistral Medium 3.5).
 
-| Grade | Share of messages sent in a conversation that is too long |
-|---|---|
-| A | under 10% |
-| B | 10 to 25% |
-| C | 25 to 40% |
-| D | 40 to 60% |
-| E | 60% and over |
-
-The grade shows up after 10 messages in the month.
-
-### A summary to share
-
-The popup also shows your messages and conversations for the month, and what
-they would have cost a company that pays for AI by usage. It is an order of
-magnitude, calculated from the public price of each assistant's default
-model (gpt-6.1-sol, Claude Sonnet 5.5, Gemini 3.8 Flash, Mistral Medium 3.5).
-
-The "Share" button draws an image of your grade, in your browser. It contains
-no excerpt of your conversations.
+The settings turn the sensitive data alerts and the other tips on or off,
+export your figures and erase them.
 
 ---
 
@@ -81,12 +57,10 @@ no excerpt of your conversations.
 
 The extension is not on the Chrome Web Store yet. To try it:
 
-1. Use the built extension package and unzip it, or build `dist/` using the
-   instructions in [ANALYSIS.md](ANALYSIS.md).
+1. Download or clone this repository. There is nothing to build.
 2. Open `chrome://extensions` in Chrome.
 3. Turn on "Developer mode", top right.
-4. Click "Load unpacked" and choose the built extension folder (`dist/` for
-   a source build).
+4. Click "Load unpacked" and choose the repository folder.
 5. Open ChatGPT, Claude, Gemini or Le Chat, or reload the tab if it was
    already open.
 
@@ -128,9 +102,10 @@ the extension. Hence the split into several scripts.
 | [background.js](background.js) | service worker. Keeps the registry of each conversation, the month's journal, and decides on the tips that follow a send |
 | [rules.js](rules.js) | the rules applied to the draft (sensitive data, secret keys, references) |
 | [tips.js](tips.js) | shows the cards in the page and runs their buttons |
-| [grade.js](grade.js) | calculates the grade for the month and the order of magnitude in euros |
-| [popup.html](popup.html), [popup.js](popup.js) | the popup and the share image |
-| [dome.js](dome.js) | the logo, shared by the cards, the popup and the image |
+| [usage.js](usage.js) | the public prices, and the order of magnitude in euros |
+| [providers.js](providers.js) | the four sites, shared by the service worker and the tests |
+| [popup.html](popup.html), [popup.js](popup.js) | the popup and its settings |
+| [dome.js](dome.js) | the logo, shared by the cards and the popup |
 | [_locales/](_locales) | the text, in English (default) and French |
 
 The extension asks for a single permission, `storage`.
@@ -150,7 +125,7 @@ response (`response.clone()`), and gives up counting when in doubt.
 
 ### Checking without a browser
 
-The draft rules, the grade and the translations:
+The draft rules and the translations:
 
 ```bash
 node rules.check.js
@@ -191,9 +166,11 @@ and how to read the answer. The four sites do it four different ways:
 
 To add a site, add an object to `ADAPTERS` modeled on the closest one, the
 site's domain to the `matches` blocks of `manifest.json`, its name to `SITE`
-in `tips.js`, and its default model to `PRICES` in `grade.js`. Then capture
+in `tips.js`, and its default model to `prices` in `usage.js`, its domain to `providers.js`. Then capture
 one real exchange into `fixtures/` (keep only the fields the adapter reads)
 so `intercept.check.js` covers it.
+
+Everything at once, including the service worker tests: `npm test`.
 
 ---
 

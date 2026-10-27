@@ -26,15 +26,6 @@ const Usage = (() => {
     }
     return {messages,low,high,long,incomplete,unpriced,breakdown};
   }
-  function days(journal, activity, month, now=new Date()) {
-    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Invalid month');
-    const [year,m]=month.split('-').map(Number), last=new Date(year,m,0).getDate(), today=dateKey(now);
-    return Array.from({length:last},(_,i)=>{
-      const date=`${month}-${String(i+1).padStart(2,'0')}`;
-      const totals=aggregate(journal?.[date]);
-      return {date,...totals,state:date>today?'future':journal?.[date]||activity?.[date]?'observed':'missing', conversations:activity?.[date]?.complete===false?null:activity?.[date]?.conversations??null};
-    });
-  }
-  return {prices,usdPerEuro,rateDate,priceDate,dateKey,aggregate,days};
+  return {prices,usdPerEuro,rateDate,priceDate,dateKey,aggregate};
 })();
 if(typeof module!=='undefined') module.exports=Usage;

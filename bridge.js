@@ -48,6 +48,9 @@ window.addEventListener("message", (event) => {
       tokensSent: Number(measure.tokensSent) || 0,
       tokensReceived: Number(measure.tokensReceived) || 0,
       justThanks: measure.justThanks === true,
+      followUpFix: measure.followUpFix === true,
+      deep: measure.deep === true,
+      regenerated: measure.regenerated === true,
     });
     // MV3 returns a promise, but not in every Chrome version.
     if (sending && typeof sending.catch === "function") sending.catch(reportDetachment);

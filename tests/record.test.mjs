@@ -19,3 +19,20 @@ test('daily conversation membership survives a month change and marks legacy gap
  const reply=await new Promise(resolve=>handlers.at(-1)({type:'optidome-reset'},{id:'test',url:'chrome-extension://test/popup.html',tab:{id:12}},resolve));
  assert.equal(reply.ok,true);assert.deepEqual(store,{});
 });
+
+test('tips after sending: quick mode once a week, redone answers, missing format',async()=>{
+ let store={};
+ const context=vm.createContext({console,Date,Number,Object,Promise,importScripts:()=>{},Usage,chrome:{runtime:{id:'test',getURL:p=>'chrome-extension://test/'+p,onMessage:{addListener:()=>{}}},storage:{local:{get:async()=>structuredClone(store),set:async v=>Object.assign(store,structuredClone(v)),clear:async()=>{store={};}}}}});
+ vm.runInContext(readFileSync(new URL('../background.js',import.meta.url),'utf8'),context);
+ const send=async extra=>{context.measure={provider:'chatgpt',conversation:'c',model:'auto',firstTurn:false,tokensSent:8,tokensReceived:20,...extra};return vm.runInContext('record(measure)',context);};
+ assert.equal((await send({deep:true}))?.id,'mode','one line with deep reasoning');
+ assert.equal(await send({deep:true}),null,'not twice in a week');
+ assert.equal(await send({deep:true,tokensSent:200}),null,'a long message may need deep reasoning');
+ const day=store.journal[Usage.dateKey()].chatgpt.auto;
+ assert.equal(day.shortDeep,2);assert.equal(day.turns,3);
+ assert.equal(await send({regenerated:true}),null);assert.equal(await send({regenerated:true}),null);
+ assert.equal((await send({regenerated:true}))?.id,'regenerate','third answer redone');
+ assert.equal(await send({regenerated:true}),null,'once per conversation');
+ assert.equal((await send({followUpFix:true}))?.id,'fix');
+ assert.equal(await send({followUpFix:true}),null,'once a month');
+});

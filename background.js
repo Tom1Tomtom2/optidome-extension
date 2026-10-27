@@ -1,6 +1,6 @@
 "use strict";
 
-importScripts('usage.js', 'analyse/providers.js', 'analyse/background.js');
+importScripts('usage.js', 'providers.js');
 
 // Service worker. It receives numbers, keeps the registry of conversations,
 // and updates the daily journal. It never sees any text.
@@ -14,6 +14,10 @@ const DAYS_KEPT = 90;
 const LONG_CONVERSATION_THRESHOLD = 30000; // tokens reread on one turn
 const THANKS_THRESHOLD = 5000; // history already reread before the thanks
 const THANKS_GAP_MS = 30 * 86400000; // the thanks tip, once a month at most
+const SHORT_MESSAGE = 30; // tokens typed, about one line of text
+const MODE_GAP_MS = 7 * 86400000; // the "quick mode" tip, once a week at most
+const FIX_GAP_MS = 30 * 86400000; // the "say the format" tip, once a month at most
+const REGENERATIONS = 3; // answers redone in one conversation before the tip
 
 // Messages arrive in bursts. We handle them one at a time so no write is lost:
 // chrome.storage is not read and written atomically.
@@ -40,11 +44,12 @@ chrome.runtime.onMessage.addListener((measure, sender) => {
 
 // Returns the tip to show after this send, or null.
 async function record(measure) {
-  const { registry = {}, journal = {}, activity = {}, lastThanks = 0 } = await chrome.storage.local.get([
+  const { registry = {}, journal = {}, activity = {}, lastThanks = 0, lastTips = {} } = await chrome.storage.local.get([
     "registry",
     "activity",
     "journal",
     "lastThanks",
+    "lastTips",
   ]);
 
   const key = `${measure.provider}:${measure.conversation ?? "unknown"}`;
@@ -70,16 +75,29 @@ async function record(measure) {
   const alreadyReread = tracked.total;
   const billedInput = tracked.total + measure.tokensSent;
   const output = measure.tokensReceived;
+  const now = Date.now();
+  // A one-line message sent with deep reasoning: the quick mode answers as well.
+  const shortDeep = measure.deep === true && measure.tokensSent > 0 && measure.tokensSent <= SHORT_MESSAGE;
+  if (measure.regenerated === true) tracked.regenerations = (tracked.regenerations ?? 0) + 1;
 
   // Thanks goes first: it is the most telling, and it is rare.
   let tip = null;
   let thanksShown = lastThanks;
-  if (measure.justThanks === true && alreadyReread >= THANKS_THRESHOLD && Date.now() - lastThanks > THANKS_GAP_MS) {
+  if (measure.justThanks === true && alreadyReread >= THANKS_THRESHOLD && now - lastThanks > THANKS_GAP_MS) {
     tip = { id: "thanks", values: { tokens: billedInput } };
-    thanksShown = Date.now();
+    thanksShown = now;
   } else if (billedInput > LONG_CONVERSATION_THRESHOLD && !tracked.longTipShown) {
-    tip = { id: "long", values: { tokens: billedInput } };
+    tip = { id: "long", values: { turns: tracked.turns + 1 } };
     tracked.longTipShown = true;
+  } else if (shortDeep && now - (lastTips.mode ?? 0) > MODE_GAP_MS) {
+    tip = { id: "mode" };
+    lastTips.mode = now;
+  } else if ((tracked.regenerations ?? 0) >= REGENERATIONS && !tracked.regenerateTipShown) {
+    tip = { id: "regenerate" };
+    tracked.regenerateTipShown = true;
+  } else if (measure.followUpFix === true && now - (lastTips.fix ?? 0) > FIX_GAP_MS) {
+    tip = { id: "fix" };
+    lastTips.fix = now;
   }
 
   tracked.total = billedInput + output;
@@ -95,7 +113,8 @@ async function record(measure) {
     billed: 0, // what was sent to the model, history included
     output: 0,
     turns: 0,
-    longTurns: 0, // sent in a conversation that is too long: the popup's grade
+    longTurns: 0, // sent in a conversation that is too long
+    shortDeep: 0, // one line sent with deep reasoning: the popup's "quick mode" tip
     incompleteConversations: 0,
   };
 
@@ -104,6 +123,7 @@ async function record(measure) {
   totals.output += output;
   totals.turns += 1;
   if (billedInput > LONG_CONVERSATION_THRESHOLD) totals.longTurns += 1;
+  if (shortDeep) totals.shortDeep = (totals.shortDeep ?? 0) + 1;
   if (!tracked.complete) totals.incompleteConversations += 1;
 
   byProvider[modelKey] = totals;
@@ -115,6 +135,7 @@ async function record(measure) {
     activity,
     journal: journal,
     lastThanks: thanksShown,
+    lastTips,
   });
   return tip;
 }
@@ -137,14 +158,9 @@ function prune(registry) {
 // All writes to the journal (including reset) are ordered in this worker.
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if(sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) return;
-  if(message?.type !== 'optidome-reset' && message?.type !== 'optidome-observe-day') return;
+  if(message?.type !== 'optidome-reset') return;
   queue = queue.then(async () => {
-    if(message.type === 'optidome-reset') await chrome.storage.local.clear();
-    else {
-      const {activity={},journal={}} = await chrome.storage.local.get(['activity','journal']);
-      activity[today()] ??= {conversations:{},complete:!journal[today()]};
-      await chrome.storage.local.set({activity});
-    }
+    await chrome.storage.local.clear();
     respond({ok:true});
   }).catch(error=>{console.warn("[optidome] storage operation failed", error);respond({ok:false});});
   return true;

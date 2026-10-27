@@ -1,82 +1,117 @@
 "use strict";
 
-// The popup: the grade for the month, the good habits, a tip, and the image
-// to share. Read only, except "Clear everything". No technical terms on
-// screen: token totals stay in the export.
+// The popup: what to do now, the good habits, the month's figures, a tip.
+// One screen, plus the settings. No technical terms on screen: token totals
+// stay in the export.
 
 const NS = "http://www.w3.org/2000/svg";
-document.getElementById('open-analysis').addEventListener('click', () => {
-  chrome.windows.create({ url: chrome.runtime.getURL('analyse/index.html'), type: 'popup', width: 470, height: 740 });
-});
 // The text follows Chrome's language (_locales), English by default; numbers
 // and dates follow the same language.
 const t = (key, ...substitutions) => chrome.i18n.getMessage(key, substitutions.map(String));
 const LANG = chrome.i18n.getUILanguage();
-const month = new Date().toISOString().slice(0, 7);
-const monthName = new Date().toLocaleDateString(LANG, { month: "long", year: "numeric" });
+const $ = (id) => document.getElementById(id);
+const DAY_MS = 86400000;
+const thisMonth = Usage.dateKey().slice(0, 7);
 
 const HABITS = ["newConversation", "dataRemoved"];
 const WEEKLY_TIPS = ["weeklyTip1", "weeklyTip2", "weeklyTip3", "weeklyTip4"];
+// Same threshold as the "long conversation" tip (background.js).
+const LONG_CONVERSATION_THRESHOLD = 30000;
+// shortcut: Gemini and Le Chat addresses inferred from their ids, never opened on a signed-in account; check before publishing.
+const CONVERSATION_URL = {
+  chatgpt: (id) => `https://chatgpt.com/c/${id}`,
+  claude: (id) => `https://claude.ai/chat/${id}`,
+  gemini: (id) => `https://gemini.google.com/app/${id.replace(/^c_/, "")}`,
+  mistral: (id) => `https://chat.mistral.ai/chat/${id}`,
+};
+
+let data = {};
+let month = thisMonth;
 
 function drawLogo() {
-  const logo = document.getElementById("logo");
-  logo.setAttribute("viewBox", DOME_VIEWBOX);
-  for (const [d, attributes] of [
-    [DOME_PATH, { fill: "currentColor", stroke: "currentColor", "stroke-width": "1.1", "stroke-linejoin": "round" }],
-    [DOME_LINE, { fill: "none", stroke: "#FF6D00", "stroke-width": "4.572", "stroke-linecap": "round" }],
-  ]) {
-    const path = document.createElementNS(NS, "path");
-    path.setAttribute("d", d);
-    for (const [name, value] of Object.entries(attributes)) path.setAttribute(name, value);
-    logo.append(path);
+  for (const logo of document.querySelectorAll(".logo")) {
+    logo.setAttribute("viewBox", DOME_VIEWBOX);
+    for (const [d, attributes] of [
+      [DOME_PATH, { fill: "currentColor", stroke: "currentColor", "stroke-width": "1.1", "stroke-linejoin": "round" }],
+      [DOME_LINE, { fill: "none", stroke: "#FF6D00", "stroke-width": "4.572", "stroke-linecap": "round" }],
+    ]) {
+      const path = document.createElementNS(NS, "path");
+      path.setAttribute("d", d);
+      for (const [name, value] of Object.entries(attributes)) path.setAttribute(name, value);
+      logo.append(path);
+    }
   }
 }
 
-const percent = (share) => share.toLocaleString(LANG, { style: "percent", maximumFractionDigits: 0 });
+const monthName = (key) =>
+  new Date(`${key}-15T12:00:00`).toLocaleDateString(LANG, key.startsWith(thisMonth.slice(0, 4)) ? { month: "long" } : { month: "long", year: "numeric" });
+const longDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString(LANG, { day: "numeric", month: "long", year: "numeric" });
+const daysOf = (key) => Object.entries(data.journal ?? {}).filter(([day]) => day.startsWith(key));
 
-// "your" in the popup, "my" in the image people share.
-function gradeSentence(grade, mine = false) {
-  if (grade.longTurns === 0) return t(mine ? "shareNotePhraseNone" : "notePhraseNone");
-  return t(mine ? "shareNotePhrase" : "notePhrase", percent(grade.share));
+// --- What to do now ---------------------------------------------------------
+
+// The heaviest conversation of the last seven days, if it is too long.
+function longestConversation() {
+  const since = Usage.dateKey(new Date(Date.now() - 6 * DAY_MS));
+  let best = null;
+  for (const [key, tracked] of Object.entries(data.registry ?? {})) {
+    const split = key.indexOf(":");
+    const provider = key.slice(0, split);
+    const id = key.slice(split + 1);
+    if (!CONVERSATION_URL[provider] || id === "unknown" || !(tracked.seenOn >= since)) continue;
+    if (tracked.total > LONG_CONVERSATION_THRESHOLD && tracked.total > (best?.tracked.total ?? 0)) best = { provider, id, tracked };
+  }
+  return best;
 }
 
-function showGrade(grade) {
-  document.getElementById("with-grade").hidden = !grade.letter;
-  document.getElementById("no-grade").hidden = Boolean(grade.letter);
-
-  const scale = document.getElementById("scale");
-  scale.textContent = "";
-  // The thresholds are in "How the grade is calculated": under each letter,
-  // they made the popup overflow the height Chrome gives it.
-  for (const letter of "ABCDE") {
-    const box = document.createElement("div");
-    if (letter === grade.letter) box.className = "current";
-    const name = document.createElement("strong");
-    name.textContent = letter;
-    box.append(name);
-    scale.append(box);
+// One line sent with deep reasoning, over the last seven days.
+function shortDeepWeek() {
+  const since = Usage.dateKey(new Date(Date.now() - 6 * DAY_MS));
+  let shortDeep = 0;
+  let turns = 0;
+  for (const [day, providers] of Object.entries(data.journal ?? {})) {
+    if (day < since) continue;
+    for (const models of Object.values(providers)) {
+      for (const totals of Object.values(models)) {
+        shortDeep += totals.shortDeep ?? 0;
+        turns += totals.turns ?? 0;
+      }
+    }
   }
-
-  const nextStep = document.getElementById("next-step");
-  nextStep.textContent = "";
-  const start = document.createElement("strong");
-  if (grade.letter === "A") {
-    start.textContent = t("bravo");
-    nextStep.append(start, " ", t("keepItUp"));
-  } else {
-    const next = grade.letter ? "ABCDE"["ABCDE".indexOf(grade.letter) - 1] : "A";
-    start.textContent = t("toReach", next);
-    nextStep.append(start, " ", t("toReachText"));
-  }
-
-  if (!grade.letter) return;
-  document.getElementById("letter").textContent = grade.letter;
-  document.getElementById("label").textContent = t(`grade_${grade.letter}`);
-  document.getElementById("sentence").textContent = gradeSentence(grade);
+  return { shortDeep, turns };
 }
 
-function showHabits(ofMonth) {
-  const list = document.getElementById("habits");
+function showTodo() {
+  $("todo-section").hidden = month !== thisMonth;
+  const longest = longestConversation();
+  $("todo-long").hidden = !longest;
+  if (longest) {
+    const site = Usage.prices[longest.provider].name;
+    const { turns, complete } = longest.tracked;
+    $("todo-long-text").textContent = t(complete ? "todoLongText" : "todoLongTextAtLeast", turns, site);
+    $("todo-long-open").onclick = async () => {
+      await chrome.storage.local.set({ openSummary: { conversation: longest.id, turns, at: Date.now() } });
+      chrome.tabs.create({ url: CONVERSATION_URL[longest.provider](longest.id) });
+      window.close();
+    };
+  }
+  const week = shortDeepWeek();
+  const seen = Date.now() - (data.modeTodoSeen ?? 0) < 7 * DAY_MS;
+  $("todo-mode").hidden = week.shortDeep < 3 || seen;
+  $("todo-mode-text").textContent = t("todoModeText", week.shortDeep, week.turns);
+  $("todo-empty").hidden = !$("todo-long").hidden || !$("todo-mode").hidden;
+}
+
+$("todo-mode-ok").addEventListener("click", async () => {
+  await chrome.storage.local.set({ modeTodoSeen: Date.now() });
+});
+
+// --- Good habits ------------------------------------------------------------
+
+function showHabits() {
+  $("habits-title").textContent = t("yourHabits", monthName(month));
+  const ofMonth = data.habits?.[month] ?? {};
+  const list = $("habits");
   list.textContent = "";
   const rows = HABITS.filter((type) => (ofMonth[type] ?? 0) > 0);
   if (rows.length === 0) {
@@ -92,7 +127,7 @@ function showHabits(ofMonth) {
     const check = document.createElement("span");
     check.className = "check";
     const drawing = document.createElementNS(NS, "svg");
-    for (const [name, value] of Object.entries({ width: 12, height: 12, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" })) {
+    for (const [name, value] of Object.entries({ width: 11, height: 11, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": 2.2, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" })) {
       drawing.setAttribute(name, value);
     }
     const stroke = document.createElementNS(NS, "path");
@@ -108,243 +143,142 @@ function showHabits(ofMonth) {
   }
 }
 
+// --- The month's figures ----------------------------------------------------
+
 // A readable range: two decimals under €1, one under €10.
-function euroRange({ low, high }) {
+function euroRange(low, high) {
   const digits = high < 1 ? 2 : high < 10 ? 1 : 0;
   const format = (n) =>
     n.toLocaleString(LANG, { style: "currency", currency: "EUR", minimumFractionDigits: digits, maximumFractionDigits: digits });
   return t("costRange", format(low), format(high));
 }
 
-const longDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString(LANG, { day: "numeric", month: "long", year: "numeric" });
+function showFigures() {
+  $("figures-title").textContent = t("monthFigures", monthName(month));
+  const sum = { messages: 0, low: 0, high: 0, unpriced: 0 };
+  const assistants = new Set();
+  for (const [, providers] of daysOf(month)) {
+    const day = Usage.aggregate(providers);
+    for (const key of Object.keys(sum)) sum[key] += day[key];
+    for (const { provider, messages } of day.breakdown) if (messages > 0) assistants.add(provider);
+  }
+  // shortcut: days recorded before 0.7 have no conversation list, so a month that old shows fewer conversations than it had.
+  const conversations = new Set();
+  for (const [day, entry] of Object.entries(data.activity ?? {})) {
+    if (!day.startsWith(month)) continue;
+    for (const [provider, ids] of Object.entries(entry.conversations ?? {})) for (const id of ids) conversations.add(`${provider}:${id}`);
+  }
 
-function showUsage(usage) {
   const number = new Intl.NumberFormat(LANG);
-  document.getElementById("messages").textContent = number.format(usage.messages);
-  document.getElementById("messages-label").textContent = t(usage.messages > 1 ? "messageMany" : "messageOne");
-  document.getElementById("conversations").textContent = number.format(usage.conversations);
-  document.getElementById("conversations-label").textContent = t(usage.conversations > 1 ? "conversationMany" : "conversationOne");
+  $("messages").textContent = number.format(sum.messages);
+  $("messages-label").textContent = t(sum.messages > 1 ? "messageMany" : "messageOne");
+  $("conversations").textContent = number.format(conversations.size);
+  $("conversations-label").textContent = t(conversations.size > 1 ? "conversationMany" : "conversationOne");
+  $("assistants").textContent = number.format(assistants.size);
+  $("assistants-label").textContent = t(assistants.size > 1 ? "assistantMany" : "assistantOne");
 
-  const cost = document.getElementById("cost");
-  const calc = document.getElementById("calc");
-  cost.hidden = calc.hidden = !usage.euros;
-  if (!usage.euros) return;
-
-  cost.textContent = "";
-  const amount = document.createElement("strong");
-  amount.textContent = euroRange(usage.euros);
-  cost.append(t("costBefore"), " ", amount, ".");
-
-  const { PRICES, PRICES_RECORDED_ON, DOLLARS_PER_EURO, RATE_DATE } = Grade;
-  document.getElementById("calc-text").textContent = t(
+  const priced = sum.messages > 0 && sum.unpriced === 0;
+  $("cost").hidden = $("calc").hidden = !priced;
+  if (!priced) return;
+  $("cost").textContent = t("costLine", number.format(sum.messages), euroRange(sum.low, sum.high));
+  $("calc-text").textContent = t(
     "calcText",
-    usage.providers.map((provider) => t("modelFor", PRICES[provider].model, PRICES[provider].assistant)).join(", "),
-    longDate(PRICES_RECORDED_ON),
-    longDate(RATE_DATE),
-    DOLLARS_PER_EURO.toLocaleString(LANG, { maximumFractionDigits: 4 })
+    [...assistants].map((provider) => t("modelFor", Usage.prices[provider].model, Usage.prices[provider].name)).join(", "),
+    longDate(Usage.priceDate),
+    longDate(Usage.rateDate),
+    Usage.usdPerEuro.toLocaleString(LANG, { maximumFractionDigits: 4 })
   );
 }
 
 function weeklyTip() {
-  const week = Math.floor(Date.now() / (7 * 86400000));
+  const week = Math.floor(Date.now() / (7 * DAY_MS));
   return t(WEEKLY_TIPS[week % WEEKLY_TIPS.length]);
 }
 
-async function render() {
-  const { journal = {}, registry = {}, habits = {} } = await chrome.storage.local.get(["journal", "registry", "habits"]);
-  const grade = Grade.gradeForMonth(journal, month);
-  const ofMonth = habits[month] ?? {};
-
-  document.getElementById("month").textContent = monthName;
-  showGrade(grade);
-  showUsage(Grade.usageForMonth(journal, registry, month));
-  showHabits(ofMonth);
-  document.getElementById("weekly-tip").textContent = weeklyTip();
-
-  const share = document.getElementById("share");
-  share.disabled = !grade.letter;
-  document.getElementById("share-text").textContent = t(grade.letter ? "shareGrade" : "gradeComingSoon");
-  share.onclick = () => downloadShareImage(grade, Object.values(ofMonth).reduce((s, n) => s + n, 0));
-}
-
-// --- The share image -----------------------------------------------------------
-//
-// Drawn in the browser, then downloaded: nothing is sent to produce it. Layout
-// from the mockups approved on 2026-10-22.
-
-function splitIntoLines(c, text, width) {
-  const lines = [];
-  let line = "";
-  for (const word of text.split(" ")) {
-    const attempt = line ? `${line} ${word}` : word;
-    if (c.measureText(attempt).width > width && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = attempt;
-    }
+function showMonths() {
+  const months = new Set([thisMonth, ...Object.keys(data.journal ?? {}).map((day) => day.slice(0, 7)), ...Object.keys(data.habits ?? {})]);
+  const select = $("month");
+  select.textContent = "";
+  for (const key of [...months].filter((key) => key <= thisMonth).sort().reverse()) {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = monthName(key);
+    option.selected = key === month;
+    select.append(option);
   }
-  return [...lines, line];
 }
 
-function drawDome(c, x, y, size, color) {
-  c.save();
-  c.translate(x, y);
-  c.scale(size / 40.87, size / 40.87);
-  c.translate(-122.45, -60.73);
-  const dome = new Path2D(DOME_PATH);
-  c.fillStyle = color;
-  c.strokeStyle = color;
-  c.lineWidth = 1.1;
-  c.lineJoin = "round";
-  c.fill(dome);
-  c.stroke(dome);
-  c.strokeStyle = "#FF6D00";
-  c.lineWidth = 4.572;
-  c.lineCap = "round";
-  c.stroke(new Path2D(DOME_LINE));
-  c.restore();
+function render() {
+  showMonths();
+  showTodo();
+  showHabits();
+  showFigures();
+  $("weekly-tip").textContent = weeklyTip();
+  $("privacy-alerts").checked = data.privacyAlerts !== false;
+  $("tips").checked = data.tips !== false;
 }
 
-async function downloadShareImage(grade, habitCount) {
-  // Without Onest, the image is drawn with the system font rather than not at all.
-  await Promise.all([document.fonts.load('700 100px "Onest"'), document.fonts.load('400 24px "Onest"')]).catch(() => {});
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 1200;
-  canvas.height = 630;
-  const c = canvas.getContext("2d");
-  const font = (weight, size) => `${weight} ${size}px "Onest", system-ui, sans-serif`;
-  c.fillStyle = "#FFFFFF";
-  c.fillRect(0, 0, 1200, 630);
-  c.textBaseline = "alphabetic";
-
-  // Header: the logo, the name, the month.
-  drawDome(c, 72, 56, 40, "#131312");
-  c.fillStyle = "#131312";
-  c.font = font(600, 26);
-  c.fillText("optidome", 124, 86);
-  c.fillStyle = "#5A5955";
-  c.font = font(600, 15);
-  c.letterSpacing = "1.2px";
-  c.textAlign = "right";
-  c.fillText(t("shareHeader", monthName.toLocaleUpperCase(LANG)), 1128, 84);
-  c.textAlign = "left";
-  c.letterSpacing = "0px";
-
-  // The grade inside its dome, resting on the line.
-  c.fillStyle = "#131312";
-  c.beginPath();
-  c.roundRect(85, 170, 210, 180, [105, 105, 16, 16]);
-  c.fill();
-  c.fillStyle = "#FF6D00";
-  c.beginPath();
-  c.roundRect(72, 362, 236, 16, 8);
-  c.fill();
-  c.fillStyle = "#FFFFFF";
-  c.font = font(700, 118);
-  c.textAlign = "center";
-  c.fillText(grade.letter, 190, 326);
-  c.textAlign = "left";
-
-  // The label, the sentence, the scale.
-  c.fillStyle = "#131312";
-  c.font = font(700, 54);
-  c.fillText(t(`grade_${grade.letter}`), 344, 222);
-  c.fillStyle = "#2E2D2A";
-  c.font = font(400, 24);
-  let y = 266;
-  for (const line of splitIntoLines(c, gradeSentence(grade, true), 430)) {
-    c.fillText(line, 344, y);
-    y += 32;
-  }
-  y += 12;
-  c.font = font(600, 20);
-  c.textAlign = "center";
-  [..."ABCDE"].forEach((letter, i) => {
-    const x = 344 + i * 60;
-    const current = letter === grade.letter;
-    c.beginPath();
-    c.roundRect(x, y, 52, 36, 18);
-    c.fillStyle = current ? "#FF6D00" : "#FFFFFF";
-    c.fill();
-    c.strokeStyle = current ? "#FF6D00" : "#D9D8D3";
-    c.lineWidth = 1;
-    c.stroke();
-    c.fillStyle = current ? "#131312" : "#5A5955";
-    c.fillText(letter, x + 26, y + 25);
-  });
-  c.textAlign = "left";
-
-  // The bars: what the AI rereads, message after message.
-  const heights = [12, 20, 32, 46, 64, 86, 112, 142, 176, 212, 250];
-  const colors = ["#ECEBE8", "#ECEBE8", "#ECEBE8", "#ECEBE8", "#D9D8D3", "#D9D8D3", "#D9D8D3", "#131312", "#131312", "#FF6D00", "#FF6D00"];
-  heights.forEach((height, i) => {
-    c.fillStyle = colors[i];
-    c.beginPath();
-    c.roundRect(806 + i * 30, 440 - height, 22, height, 4);
-    c.fill();
-  });
-
-  // Footer: the good habits, and the bridge to the company.
-  c.fillStyle = "#ECEBE8";
-  c.fillRect(72, 500, 1056, 1);
-  c.fillStyle = "#FFF1E6";
-  c.beginPath();
-  c.arc(85, 553, 13, 0, Math.PI * 2);
-  c.fill();
-  c.strokeStyle = "#B54D00";
-  c.lineWidth = 2.2;
-  c.lineCap = "round";
-  c.lineJoin = "round";
-  c.beginPath();
-  c.moveTo(79, 553.5);
-  c.lineTo(83, 557.5);
-  c.lineTo(91, 548.5);
-  c.stroke();
-  c.fillStyle = "#131312";
-  c.font = font(500, 18);
-  const habits = habitCount === 0 ? t("shareNoHabit") : habitCount === 1 ? t("shareHabitOne") : t("shareHabitMany", habitCount);
-  c.fillText(habits, 108, 559);
-  c.textAlign = "right";
-  c.font = font(600, 18);
-  c.fillText("optidome.app", 1128, 559);
-  const width = c.measureText("optidome.app").width;
-  c.fillStyle = "#5A5955";
-  c.font = font(400, 18);
-  c.fillText(`${t("shareQuestion")} `, 1128 - width, 559);
-  c.textAlign = "left";
-
-  const link = document.createElement("a");
-  link.href = canvas.toDataURL("image/png");
-  link.download = `optidome-grade-${month}.png`;
-  link.click();
-}
-
-// --- Your data -----------------------------------------------------------------
-
-document.getElementById("data-button").addEventListener("click", (event) => {
-  const block = document.getElementById("data");
-  block.hidden = !block.hidden;
-  event.currentTarget.setAttribute("aria-expanded", String(!block.hidden));
+$("month").addEventListener("change", (event) => {
+  month = event.target.value;
+  render();
 });
 
-document.getElementById("export").addEventListener("click", async () => {
-  const data = await chrome.storage.local.get(["journal", "registry", "habits"]);
-  const file = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+// --- Settings ---------------------------------------------------------------
+
+let armed = false; // "Clear everything" waits for a second click
+const showSettings = (open) => {
+  $("home").hidden = open;
+  $("settings").hidden = !open;
+  armed = false;
+  $("clear-confirm").hidden = true;
+  $("clear").textContent = t("clearAll");
+};
+$("open-settings").addEventListener("click", () => showSettings(true));
+$("close-settings").addEventListener("click", () => showSettings(false));
+
+$("privacy-alerts").addEventListener("change", (event) => chrome.storage.local.set({ privacyAlerts: event.target.checked }));
+$("tips").addEventListener("change", (event) => chrome.storage.local.set({ tips: event.target.checked }));
+
+$("export").addEventListener("click", () => {
+  const { journal = {}, activity = {}, registry = {}, habits = {} } = data;
+  const file = new Blob([JSON.stringify({ journal, activity, registry, habits }, null, 2)], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(file);
-  link.download = `optidome-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `optidome-${Usage.dateKey()}.json`;
   link.click();
   URL.revokeObjectURL(link.href);
 });
 
-document.getElementById("clear").addEventListener("click", async () => {
-  await chrome.storage.local.clear();
-  render();
+// Two clicks: the first one says what will be erased.
+$("clear").addEventListener("click", async () => {
+  armed = !armed;
+  $("clear-confirm").hidden = false;
+  if (armed) {
+    $("clear-confirm").textContent = t("clearConfirm");
+    $("clear").textContent = t("clearConfirmButton");
+    return;
+  }
+  // The service worker erases, so no measure being written is lost halfway.
+  const reply = await chrome.runtime.sendMessage({ type: "optidome-reset" }).catch(() => null);
+  $("clear-confirm").textContent = t(reply?.ok ? "cleared" : "clearFailed");
+  $("clear").textContent = t("clearAll");
 });
+
+// --- Start ------------------------------------------------------------------
 
 document.documentElement.lang = LANG;
 for (const element of document.querySelectorAll("[data-i18n]")) element.textContent = t(element.dataset.i18n);
+for (const element of document.querySelectorAll("[data-i18n-label]")) element.setAttribute("aria-label", t(element.dataset.i18nLabel));
 drawLogo();
-render();
+chrome.storage.local.get(null).then((values) => {
+  data = values;
+  render();
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  for (const [key, { newValue }] of Object.entries(changes)) {
+    if (newValue === undefined) delete data[key];
+    else data[key] = newValue;
+  }
+  render();
+});

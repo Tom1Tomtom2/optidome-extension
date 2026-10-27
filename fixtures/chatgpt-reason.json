@@ -1,0 +1,21 @@
+{
+  "seen": "Rebuilt, not captured: request and stream shapes noted on 2026-10-22 on a signed-in free account (docs: system_hints, delta v1). Checks the deep reasoning switch.",
+  "url": "https://chatgpt.com/backend-api/f/conversation",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "{\"action\": \"next\", \"messages\": [{\"content\": {\"parts\": [\"Capitale de l'Italie ?\"]}}], \"model\": \"auto\", \"system_hints\": [\"reason\"], \"conversation_id\": null, \"parent_message_id\": \"client-created-root\"}",
+  "response": "data: {\"v\": {\"message\": {\"author\": {\"role\": \"assistant\"}, \"content\": {\"content_type\": \"text\", \"parts\": [\"Rome\"]}}}, \"c\": 0}\n\ndata: {\"o\": \"patch\", \"v\": [{\"p\": \"/message/content/parts/0\", \"o\": \"append\", \"v\": \".\"}]}\n\ndata: {\"conversation_id\": \"6720b1c4-0000-4000-8000-000000000001\"}\n\ndata: [DONE]\n\n",
+  "expect": {
+    "provider": "chatgpt",
+    "model": "auto",
+    "conversation": "6720b1c4-0000-4000-8000-000000000001",
+    "firstTurn": true,
+    "sentText": "Capitale de l'Italie ?",
+    "answer": "Rome.",
+    "justThanks": false,
+    "followUpFix": false,
+    "deep": true,
+    "regenerated": false
+  }
+}

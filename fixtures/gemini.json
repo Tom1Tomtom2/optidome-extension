@@ -14,6 +14,9 @@
     "firstTurn": true,
     "sentText": "Merci",
     "answer": "De rien ! N'hésite pas si tu as d'autres questions ou besoin d'aide pour quoi que ce soit.",
-    "justThanks": true
+    "justThanks": true,
+    "followUpFix": false,
+    "deep": false,
+    "regenerated": false
   }
 }

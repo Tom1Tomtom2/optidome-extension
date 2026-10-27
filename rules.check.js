@@ -1,11 +1,10 @@
 "use strict";
 
-// Checks the rules, the grade and the translations, without a browser:
+// Checks the rules and the translations, without a browser:
 // `node rules.check.js`.
 
 const fs = require("fs");
 const R = require("./rules.js");
-const G = require("./grade.js");
 
 let checks = 0;
 const check = (expected, actual, name) => {
@@ -67,45 +66,6 @@ for (const text of [
 check(R.fingerprint("abc"), R.fingerprint("abc"), "stable fingerprint");
 check(false, R.fingerprint("abc") === R.fingerprint("abd"), "different fingerprint");
 
-// The grade for the month.
-const journal = (turns, longTurns) => ({
-  "2026-10-03": { chatgpt: { auto: { turns, longTurns } } },
-  "2026-09-30": { chatgpt: { auto: { turns: 100, longTurns: 100 } } }, // other month, ignored
-});
-check(null, G.gradeForMonth(journal(9, 0), "2026-10").letter, "too few messages");
-check("A", G.gradeForMonth(journal(100, 9), "2026-10").letter, "A under 10%");
-check("B", G.gradeForMonth(journal(100, 10), "2026-10").letter, "B at 10%");
-check("B", G.gradeForMonth(journal(100, 18), "2026-10").letter, "B at 18%");
-check("C", G.gradeForMonth(journal(100, 25), "2026-10").letter, "C at 25%");
-check("D", G.gradeForMonth(journal(100, 59), "2026-10").letter, "D at 59%");
-check("E", G.gradeForMonth(journal(100, 60), "2026-10").letter, "E at 60%");
-
-// The month's exchanges and their range in euros.
-const cents = (n) => Math.round(n * 100) / 100;
-const usage = G.usageForMonth(
-  {
-    "2026-10-03": { chatgpt: { auto: { turns: 150, typed: 80000, billed: 400000, output: 60000 } } },
-    "2026-10-04": { chatgpt: { auto: { turns: 64, typed: 40000, billed: 240000, output: 40000 } } },
-    "2026-09-30": { chatgpt: { auto: { turns: 999, typed: 1, billed: 1, output: 1 } } }, // other month, ignored
-  },
-  { "chatgpt:a": { seenOn: "2026-10-04" }, "chatgpt:b": { seenOn: "2026-10-01" }, "chatgpt:c": { seenOn: "2026-09-12" } },
-  "2026-10"
-);
-check(214, usage.messages, "messages of the month");
-check(2, usage.conversations, "conversations of the month");
-// Low: (120,000 x 2 + 520,000 x 0.1 + 100,000 x 10) / 1e6 = $1.292, x 0.85, / 1.1355.
-check(0.97, cents(usage.euros.low), "low end of the range");
-// High: (640,000 x 2 + 100,000 x 10) / 1e6 = $2.28, x 1.15, / 1.1355.
-check(2.31, cents(usage.euros.high), "high end of the range");
-check(null, G.usageForMonth({}, {}, "2026-10").euros, "month without messages");
-// Each assistant is priced with its own model: 100,000 tokens typed in a new
-// conversation on Gemini, 0 reread, 50,000 out.
-const gemini = G.usageForMonth({ "2026-10-05": { gemini: { x: { turns: 1, typed: 100000, billed: 100000, output: 50000 } } } }, {}, "2026-10");
-check(["gemini"], gemini.providers, "assistants used");
-// (100,000 x 0.75 + 50,000 x 3.75) / 1e6 = $0.2625, x 0.85, / 1.1355.
-check(0.2, cents(gemini.euros.low), "Gemini low end");
-check(["chatgpt"], usage.providers, "ChatGPT only");
-
 // The translations: both languages have the same keys, and every key the
 // code asks for exists. Keys built from a variable are listed by hand.
 const en = JSON.parse(fs.readFileSync(`${__dirname}/_locales/en/messages.json`, "utf8"));
@@ -117,7 +77,9 @@ const used = [
   ...[...code.matchAll(/data-i18n="(\w+)"/g)].map((m) => m[1]),
   ...[...code.matchAll(/__MSG_(\w+)__/g)].map((m) => m[1]),
   ...["iban", "card", "ssn", "emails"].map((kind) => `dataTitle_${kind}`),
-  ..."ABCDE".split("").map((letter) => `grade_${letter}`),
+  // Keys picked by a condition.
+  ...["longText", "longTextCount", "todoLongText", "todoLongTextAtLeast", "messageOne", "messageMany"],
+  ...["conversationOne", "conversationMany", "assistantOne", "assistantMany", "cleared", "clearFailed", "dataTextOne", "dataTextMany"],
   "habit_newConversation",
   "habit_dataRemoved",
   "weeklyTip1",
@@ -133,4 +95,7 @@ for (const [lang, messages] of [["en", en], ["fr", fr]]) {
   }
 }
 
-console.log(`rules, grade and translations: ${checks} checks passed`);
+// And every key of the files is still used somewhere.
+check([], Object.keys(en).filter((key) => !used.includes(key) && !code.includes(`"${key}"`)), "every key exists for a reason");
+
+console.log(`rules and translations: ${checks} checks passed`);

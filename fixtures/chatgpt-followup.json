@@ -1,0 +1,21 @@
+{
+  "seen": "Rebuilt, not captured, like chatgpt-reason.json. Checks a short message that asks to redo the answer.",
+  "url": "https://chatgpt.com/backend-api/f/conversation",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "{\"action\": \"next\", \"messages\": [{\"content\": {\"parts\": [\"Non, plus court\"]}}], \"model\": \"auto\", \"conversation_id\": \"6720b1c4-0000-4000-8000-000000000001\", \"parent_message_id\": \"m1\"}",
+  "response": "data: {\"v\": {\"message\": {\"author\": {\"role\": \"assistant\"}, \"content\": {\"content_type\": \"text\", \"parts\": [\"Rome,\"]}}}, \"c\": 0}\n\ndata: {\"o\": \"patch\", \"v\": [{\"p\": \"/message/content/parts/0\", \"o\": \"append\", \"v\": \" capitale.\"}]}\n\ndata: {\"conversation_id\": \"6720b1c4-0000-4000-8000-000000000001\"}\n\ndata: [DONE]\n\n",
+  "expect": {
+    "provider": "chatgpt",
+    "model": "auto",
+    "conversation": "6720b1c4-0000-4000-8000-000000000001",
+    "firstTurn": false,
+    "sentText": "Non, plus court",
+    "answer": "Rome, capitale.",
+    "justThanks": false,
+    "followUpFix": true,
+    "deep": false,
+    "regenerated": false
+  }
+}

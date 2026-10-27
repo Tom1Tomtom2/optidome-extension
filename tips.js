@@ -17,9 +17,21 @@
   // ChatGPT and Gemini mark their box as a textbox; Claude and Le Chat use a
   // ProseMirror editor without that role.
   const BOX = '[contenteditable="true"][role="textbox"], .ProseMirror[contenteditable="true"], textarea';
-  let privacyAlerts=true, tipsMode='manual';
-  chrome.storage.local.get(['privacyAlerts','tipsMode']).then(v=>{privacyAlerts=v.privacyAlerts!==false;tipsMode=v.tipsMode||'manual';});
-  chrome.storage.onChanged.addListener((changes,area)=>{if(area!=='local')return;if(changes.privacyAlerts)privacyAlerts=changes.privacyAlerts.newValue!==false;if(changes.tipsMode)tipsMode=changes.tipsMode.newValue||'manual';if(displayed)hide();});
+  // The two switches of the popup's settings, both on by default.
+  let privacyAlerts = true, tipsOn = true;
+  try {
+    chrome.storage.local.get(["privacyAlerts", "tips"]).then((v) => {
+      privacyAlerts = v.privacyAlerts !== false;
+      tipsOn = v.tips !== false;
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local") return;
+      if (changes.privacyAlerts) privacyAlerts = changes.privacyAlerts.newValue !== false;
+      if (changes.tips) tipsOn = changes.tips.newValue !== false;
+    });
+  } catch (error) {
+    // Extension detached.
+  }
   const PAUSE_MS = 1000;
   const PASTE_MIN = 2000;
   const DAY_MS = 86400000;
@@ -83,11 +95,11 @@
       text: t("pastedText", SITE),
       primary: [t("gotIt"), "close"],
     }),
-    long: () => ({
+    long: ({ turns }) => ({
       icon: "layers",
       category: t("catLongConversation"),
       title: t("longTitle"),
-      text: t("longText", SITE),
+      text: turns ? t("longTextCount", SITE, turns) : t("longText", SITE),
       bars: true,
       primary: [t("prepareSummary"), "summarize"],
       secondary: [t("later"), "snooze"],
@@ -98,6 +110,30 @@
       category: t("catDidYouKnow"),
       title: t("thanksTitle"),
       text: t("thanksText", SITE),
+      primary: [t("gotIt"), "close"],
+      secondary: [t("dontShowAgain"), "stop"],
+    }),
+    mode: () => ({
+      icon: "bolt",
+      category: t("catMode"),
+      title: t("modeTitle"),
+      text: t("modeText", SITE),
+      primary: [t("gotIt"), "close"],
+      secondary: [t("dontShowAgain"), "stop"],
+    }),
+    regenerate: () => ({
+      icon: "bubble",
+      category: t("catDidYouKnow"),
+      title: t("regenerateTitle"),
+      text: t("regenerateText"),
+      primary: [t("gotIt"), "close"],
+      secondary: [t("dontShowAgain"), "stop"],
+    }),
+    fix: () => ({
+      icon: "bubble",
+      category: t("catDidYouKnow"),
+      title: t("fixTitle"),
+      text: t("fixText"),
       primary: [t("gotIt"), "close"],
       secondary: [t("dontShowAgain"), "stop"],
     }),
@@ -192,6 +228,7 @@
     bubble: ["M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"],
     copy: ["M5.5 5.5h8v8h-8z", "M2.5 10.5v-8h8"],
     check: ["m3.5 8.5 3 3 6-6.5"],
+    bolt: ["M9 1.5 3.5 9h4L7 14.5 12.5 7h-4z"],
     cross: ["m4 4 8 8M12 4l-8 8"],
   };
 
@@ -352,7 +389,7 @@
   async function show(id, values = {}, origin = "send") {
     followConversation();
     if (!CARDS[id]) return;
-    if (['key','data'].includes(id) ? !privacyAlerts : tipsMode !== 'occasional') return;
+    if (["key", "data"].includes(id) ? !privacyAlerts : !tipsOn && id !== "habit") return;
     const content = CARDS[id](values);
     if (!content.free) {
       if (shown.size > 0) return; // one tip per conversation
@@ -468,7 +505,7 @@
       clearTimeout(timer);
       timer = setTimeout(() => {
         try {
-          if (!privacyAlerts && tipsMode !== "occasional") return;
+          if (!privacyAlerts && !tipsOn) return;
           const tip = TipRules.tipForDraft(readBox(box));
           if (tip) show(tip.id, tip, "draft");
         } catch (error) {
@@ -518,8 +555,19 @@
   // --- Only once, on the first visit -----------------------------------------
 
   setTimeout(async () => {
-    if (tipsMode !== "occasional" || displayed || (await load("trainingShown", false))) return;
+    if (!tipsOn || displayed || (await load("trainingShown", false))) return;
     await save("trainingShown", true);
     show("training", {}, "welcome");
   }, 4000);
+
+  // --- Opened from the popup, to summarize this conversation -------------------
+  //
+  // The popup's "longest conversation" button opens it in a new tab and leaves
+  // a note: the "long" tip shows as soon as the page is ready.
+  setTimeout(async () => {
+    const asked = await load("openSummary", null);
+    if (!asked || Date.now() - asked.at > 60000 || !location.pathname.includes(asked.conversation.replace(/^c_/, ""))) return;
+    await save("openSummary", null);
+    show("long", { turns: asked.turns }, "popup");
+  }, 2500);
 })();

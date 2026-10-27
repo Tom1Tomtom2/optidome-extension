@@ -79,6 +79,9 @@ async function run(fixture) {
       conversation: measure.conversation,
       firstTurn: measure.firstTurn,
       justThanks: measure.justThanks,
+      followUpFix: measure.followUpFix === true,
+      deep: measure.deep === true,
+      regenerated: measure.regenerated === true,
     };
     const wanted = { ...expected, tokensSent: tokens(sentText), tokensReceived: tokens(answer) };
     const got = measure && { ...actual, tokensSent: measure.tokensSent, tokensReceived: measure.tokensReceived };

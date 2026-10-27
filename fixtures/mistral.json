@@ -11,6 +11,9 @@
     "firstTurn": true,
     "sentText": "Cite trois fruits rouges, en une ligne.",
     "answer": "Fraise, framboise et cerise.",
-    "justThanks": false
+    "justThanks": false,
+    "followUpFix": false,
+    "deep": false,
+    "regenerated": false
   }
 }

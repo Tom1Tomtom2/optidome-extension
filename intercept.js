@@ -25,6 +25,16 @@
       text.trim()
     );
 
+  // A short message that asks to redo the previous answer ("non", "plus
+  // court", "try again"): the format was missing from the first request.
+  // Same rule as above: only the boolean leaves this file.
+  const isFollowUpFix = (text) =>
+    typeof text === "string" &&
+    text.trim().split(/\s+/).length <= 6 &&
+    /^(?:non\b|pas (?:ça|ca)\b|(?:c'est |ce n'est )?pas (?:ça|ca|ce que)|plus (?:court|courte|simple|long|longue|clair|claire)\b|trop (?:long|longue|compliqué)\b|reformule|recommence|refais|réessaie|essaie encore|not (?:that|what)|shorter\b|simpler\b|longer\b|too long\b|rephrase|try again|redo\b)/iu.test(
+      text.trim()
+    );
+
   // Diagnostic mode: logs the raw shape of requests and responses in the
   // console, to check the adapters below when a site changes.
   // Turn it on from the site's console:
@@ -51,6 +61,10 @@
     matches: (url, method) =>
       method === "POST" && /\/backend-[a-z]+\/(f\/)?conversation(\?|$)/.test(url),
     model: (sent) => sent?.model ?? "unknown",
+    // Seen on 2026-10-22, signed in: the "Think" switch sends
+    // system_hints ["reason"], and "Try again" sends action "variant".
+    deep: (sent) => Array.isArray(sent?.system_hints) && sent.system_hints.includes("reason"),
+    regenerated: (sent) => sent?.action === "variant",
     conversation: (sent) => sent?.conversation_id ?? null,
     // On the very first turn, ChatGPT has no conversation id yet and names
     // "client-created-root" as the parent. The id arrives in the response,
@@ -209,6 +223,7 @@
       tokensSent: estimateTokens(sent.text),
       tokensReceived: estimateTokens(waiting.answer),
       justThanks: isJustThanks(sent.text),
+      followUpFix: isFollowUpFix(sent.text),
     });
   }
 
@@ -305,6 +320,8 @@
     name: "mistral",
     matches: (url, method) => method === "POST" && /\/api\/chat(\?|$)/.test(url),
     model: (sent) => sent?.modelConfig?.model_alias ?? "unknown",
+    // shortcut: only "low" was seen (2026-10-27), "high" is assumed to be the deep setting; capture it before publishing.
+    deep: (sent) => sent?.modelConfig?.reasoning_effort === "high",
     conversation: (sent) => sent?.chatId ?? null,
     firstTurn: (sent) => sent?.mode === "create",
     sentMessage: (sent) =>
@@ -536,6 +553,10 @@
         tokensSent: estimateTokens(message),
         tokensReceived: estimateTokens(text),
         justThanks: isJustThanks(message),
+        followUpFix: isFollowUpFix(message),
+        // Claude and Gemini: where the reasoning setting sits was never captured, so they stay silent.
+        deep: adapter.deep?.(sent) === true,
+        regenerated: adapter.regenerated?.(sent) === true,
       });
     } catch (error) {
       if (diagnostic()) console.warn("[optidome] measure failed", error);
