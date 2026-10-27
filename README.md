@@ -10,6 +10,14 @@ forgotten. It only keeps numbers, in Chrome's storage.
 For now, tips show up on ChatGPT only. The extension speaks English and
 French, and follows the language of your browser.
 
+This experimental branch adds an **optional local request analyser**. Click
+“Choose a reasoning level”, review the copied draft, then click “Analyse on
+this computer”. It suggests a broad reasoning level or abstains. It never
+runs automatically, changes the chat, or selects a model for you. See
+[ANALYSIS.md](ANALYSIS.md) for limitations, build instructions and the audit.
+The built package includes MiniLM and runs offline; the source repository
+does not include the model weights or compiled runtime.
+
 ---
 
 ## What the extension does
@@ -67,10 +75,12 @@ no excerpt of your conversations.
 
 The extension is not on the Chrome Web Store yet. To try it:
 
-1. Download this repository ("Code" button, then "Download ZIP") and unzip it.
+1. Use the built extension package and unzip it, or build `dist/` using the
+   instructions in [ANALYSIS.md](ANALYSIS.md).
 2. Open `chrome://extensions` in Chrome.
 3. Turn on "Developer mode", top right.
-4. Click "Load unpacked" and choose the unzipped folder.
+4. Click "Load unpacked" and choose the built extension folder (`dist/` for
+   a source build).
 5. Open ChatGPT, or reload the tab if it was already open.
 
 The optidome icon shows up in Chrome's toolbar (if needed, pin it from the

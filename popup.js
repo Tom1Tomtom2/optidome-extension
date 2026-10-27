@@ -5,6 +5,9 @@
 // screen: token totals stay in the export.
 
 const NS = "http://www.w3.org/2000/svg";
+document.getElementById('open-analysis').addEventListener('click', () => {
+  chrome.windows.create({ url: chrome.runtime.getURL('analyse/index.html'), type: 'popup', width: 470, height: 740 });
+});
 // The text follows Chrome's language (_locales), English by default; numbers
 // and dates follow the same language.
 const t = (key, ...substitutions) => chrome.i18n.getMessage(key, substitutions.map(String));

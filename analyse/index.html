@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>optidome</title><link rel="stylesheet" href="style.css"></head>
+<body>
+  <header><span class="brand">optidome<span class="dot">.</span></span><span class="badge" data-i18n="analysisBadge"></span></header>
+  <main>
+    <h1 data-i18n="analysisTitle"></h1>
+    <p class="intro" data-i18n="analysisIntro"></p>
+    <label for="draft" data-i18n="analysisDraft"></label>
+    <textarea id="draft" rows="6" maxlength="8000" spellcheck="false" autocomplete="off"></textarea>
+    <p id="snapshot" class="small" data-i18n="analysisSnapshot"></p>
+    <label class="context"><input id="context" type="checkbox"><span data-i18n="analysisContext"></span></label>
+    <div class="actions"><button id="analyse" data-i18n="analysisRun"></button><button id="cancel" class="secondary" hidden data-i18n="analysisCancel"></button></div>
+    <p id="status" role="status" aria-live="polite"></p>
+    <section id="result" hidden aria-labelledby="recommendation"><span class="eyebrow" data-i18n="analysisSuggestion"></span><h2 id="recommendation"></h2><p id="reason"></p><p id="model"></p><ul id="notes"></ul></section>
+    <details><summary data-i18n="analysisLimitsTitle"></summary><p data-i18n="analysisLimits"></p></details>
+    <label class="context small"><input id="hide-launcher" type="checkbox"><span data-i18n="analysisHide"></span></label>
+  </main>
+  <footer data-i18n="analysisPrivacy"></footer>
+  <script type="module" src="page.mjs"></script>
+</body>
+</html>

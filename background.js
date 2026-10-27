@@ -1,5 +1,7 @@
 "use strict";
 
+importScripts('analyse/background.js');
+
 // Service worker. It receives numbers, keeps the registry of conversations,
 // and updates the daily journal. It never sees any text.
 //
