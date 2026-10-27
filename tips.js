@@ -1,7 +1,7 @@
 "use strict";
 
-// Shows the tips on ChatGPT. Runs in the extension's isolated world, after
-// rules.js and dome.js (same scope).
+// Shows the tips on ChatGPT, Claude, Gemini and Le Chat. Runs in the
+// extension's isolated world, after rules.js and dome.js (same scope).
 //
 // Two sources of tips:
 // - the draft, read in the message box after a pause in typing
@@ -14,10 +14,23 @@
 // in the message box.
 
 (() => {
-  const BOX = '[contenteditable="true"][role="textbox"], textarea';
+  // ChatGPT and Gemini mark their box as a textbox; Claude and Le Chat use a
+  // ProseMirror editor without that role.
+  const BOX = '[contenteditable="true"][role="textbox"], .ProseMirror[contenteditable="true"], textarea';
   const PAUSE_MS = 1000;
   const PASTE_MIN = 2000;
   const DAY_MS = 86400000;
+
+  const SITE = {
+    "chatgpt.com": "ChatGPT",
+    "chat.openai.com": "ChatGPT",
+    "claude.ai": "Claude",
+    "gemini.google.com": "Gemini",
+    "chat.mistral.ai": "Le Chat",
+  }[location.hostname] ?? "ChatGPT";
+
+  // The address of a new, still empty conversation, on each site.
+  const isNewConversation = (path) => ["/", "/new", "/app", "/chat"].includes(path.replace(/\/$/, "") || "/");
 
   // The text follows Chrome's language (_locales), English by default.
   const t = (key, ...substitutions) => {
@@ -39,7 +52,7 @@
       icon: "shield",
       category: t("catPrivacy"),
       title: t("keyTitle"),
-      text: t("keyText"),
+      text: t("keyText", SITE),
       primary: [t("keyRemove"), "replace"],
       secondary: [t("keep"), "close"],
     }),
@@ -48,7 +61,7 @@
       icon: "shield",
       category: t("catPrivacy"),
       title: t(`dataTitle_${kind}`),
-      text: t(kind === "emails" ? "dataTextMany" : "dataTextOne"),
+      text: t(kind === "emails" ? "dataTextMany" : "dataTextOne", SITE),
       primary: excerpt ? [t("replaceWithExample"), "replace"] : [t("gotIt"), "close"],
       secondary: excerpt ? [t("keep"), "close"] : null,
     }),
@@ -64,14 +77,14 @@
       icon: "copy",
       category: t("catLongConversation"),
       title: t("pastedTitle"),
-      text: t("pastedText"),
+      text: t("pastedText", SITE),
       primary: [t("gotIt"), "close"],
     }),
     long: () => ({
       icon: "layers",
       category: t("catLongConversation"),
       title: t("longTitle"),
-      text: t("longText"),
+      text: t("longText", SITE),
       bars: true,
       primary: [t("prepareSummary"), "summarize"],
       secondary: [t("later"), "snooze"],
@@ -81,17 +94,17 @@
       icon: "bubble",
       category: t("catDidYouKnow"),
       title: t("thanksTitle"),
-      text: t("thanksText"),
+      text: t("thanksText", SITE),
       primary: [t("gotIt"), "close"],
       secondary: [t("dontShowAgain"), "stop"],
     }),
-    // shortcut: the French menu name "Gestion des données" was never seen on screen, check before publishing.
+    // shortcut: the French menu name "Gestion des données" and the other sites' privacy settings were never seen on screen, check before publishing.
     training: () => ({
       free: true,
       icon: "dome",
       category: t("catWelcome"),
-      title: t("trainingTitle"),
-      text: t("trainingText"),
+      title: t("trainingTitle", SITE),
+      text: SITE === "ChatGPT" ? t("trainingText_chatgpt") : t("trainingText", SITE),
       primary: [t("gotIt"), "close"],
       note: t("trainingNote"),
     }),
@@ -139,7 +152,8 @@
 
   // --- Current conversation --------------------------------------------------
   //
-  // The first send moves the address from "/" to "/c/<id>": it is the same
+  // The first send moves the address from a new conversation ("/" on
+  // ChatGPT) to the conversation's own ("/c/<id>"): it is the same
   // conversation. Any other change opens a new one.
   // shortcut: page memory only, a reload resets the counters.
 
@@ -151,16 +165,16 @@
   function followConversation() {
     if (location.pathname === path) return;
     const before = path;
-    if (path !== "/") {
+    if (!isNewConversation(path)) {
       shown = new Set();
       pastes = new Set();
     }
     path = location.pathname;
     // The "long" tip was followed: the person starts over in a new conversation.
-    if (longIn && before === longIn && path === "/") {
+    if (longIn && before === longIn && isNewConversation(path)) {
       longIn = null;
       countHabit("newConversation").then((count) =>
-        show("habit", { title: t("newConvTitle"), text: t("newConvText"), count }, "habit")
+        show("habit", { title: t("newConvTitle"), text: t("newConvText", SITE), count }, "habit")
       );
     }
   }
@@ -262,11 +276,14 @@
   shadow.append(style, card);
   let displayed = null; // { id, origin, values }
 
-  // ChatGPT puts a "dark" or "light" class on the page; otherwise, the system.
+  // Each site marks its theme its own way: read the page's background colour
+  // instead; otherwise, the system.
   function isDark() {
-    const classes = document.documentElement.classList;
-    if (classes.contains("dark")) return true;
-    if (classes.contains("light")) return false;
+    for (const element of [document.body, document.documentElement]) {
+      if (!element) continue;
+      const [r, g, b, a = 1] = (getComputedStyle(element).backgroundColor.match(/[\d.]+/g) ?? []).map(Number);
+      if (b !== undefined && a > 0) return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+    }
     return matchMedia("(prefers-color-scheme: dark)").matches;
   }
 

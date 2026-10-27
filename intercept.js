@@ -150,7 +150,50 @@
     },
   };
 
-  const ADAPTERS = [CHATGPT, CLAUDE];
+  // Format seen on 2026-10-27, signed out. The request is a form:
+  //   f.req=[null,"<JSON string>"]
+  // whose inner array holds the message at [0][0], and from the second turn on
+  // [conversation, answer, draft] ids at [2]. The model is a code in a header.
+  // Signed out, Gemini opens a new conversation for every message.
+  const GEMINI = {
+    name: "gemini",
+    matches: (url, method) =>
+      method === "POST" && url.includes(".BardFrontendService/StreamGenerate"),
+    parseSent: (body) => JSON.parse(JSON.parse(new URLSearchParams(body).get("f.req"))[1]),
+    model: (sent, headers) => {
+      try {
+        return JSON.parse(headers.get("x-goog-ext-525001261-jspb"))[4] ?? "unknown";
+      } catch (error) {
+        return "unknown";
+      }
+    },
+    conversation: (sent) => sent?.[2]?.[0] ?? null,
+    firstTurn: (sent) => !sent?.[2]?.[0],
+    sentMessage: (sent) => sent?.[0]?.[0] ?? "",
+    // The answer is not SSE: after ")]}'", each block is a line with its
+    // length, then a line [["wrb.fr",null,"<JSON string>"]]. Each block repeats
+    // the whole answer so far at [4][0][1][0], and the conversation id at [1][0].
+    parseLine: (line) =>
+      line.startsWith("[[")
+        ? JSON.parse(line)
+            .filter((item) => item?.[0] === "wrb.fr" && typeof item[2] === "string")
+            .map((item) => JSON.parse(item[2]))
+        : [],
+    accumulator() {
+      let text = "";
+      let conversation = null;
+      return {
+        line(inner) {
+          if (typeof inner?.[1]?.[0] === "string") conversation = inner[1][0];
+          const answer = inner?.[4]?.[0]?.[1]?.[0];
+          if (typeof answer === "string" && answer.length >= text.length) text = answer;
+        },
+        result: () => ({ text, conversation }),
+      };
+    },
+  };
+
+  const ADAPTERS = [CHATGPT, CLAUDE, GEMINI];
 
   // --- Reading the stream ----------------------------------------------------
 
@@ -177,6 +220,17 @@
       const lines = rest.split("\n");
       rest = lines.pop() ?? "";
       for (const line of lines) {
+        if (adapter.parseLine) {
+          try {
+            for (const object of adapter.parseLine(line)) {
+              if (diagnostic()) console.log("[optidome] received", object);
+              accumulator.line(object);
+            }
+          } catch (error) {
+            // A line the adapter does not understand: skip it.
+          }
+          continue;
+        }
         if (!line.startsWith("data:")) continue;
         const payload = line.slice(5).trim();
         if (payload === "[DONE]") {
@@ -196,12 +250,12 @@
     return accumulator.result();
   }
 
-  async function readSentBody(requestCopy, options) {
+  async function readSentBody(adapter, requestCopy, options) {
     try {
-      if (options && typeof options.body === "string") return JSON.parse(options.body);
-      if (requestCopy) return JSON.parse(await requestCopy.text());
+      const body = typeof options?.body === "string" ? options.body : requestCopy ? await requestCopy.text() : null;
+      if (body != null) return (adapter.parseSent ?? JSON.parse)(body);
     } catch (error) {
-      // No body, or not JSON.
+      // No body, or not in the expected shape.
     }
     return null;
   }
@@ -226,6 +280,7 @@
     let adapter = null;
     let url = "";
     let requestCopy = null;
+    let headers = null;
 
     try {
       url = typeof input === "string" ? input : input?.url ?? "";
@@ -233,6 +288,7 @@
 
       adapter = ADAPTERS.find((candidate) => candidate.matches(url, method)) ?? null;
       if (adapter && input instanceof Request) requestCopy = input.clone();
+      if (adapter) headers = new Headers(options?.headers ?? (input instanceof Request ? input.headers : undefined));
 
       // In diagnostic mode, every send is announced. This is how to find the
       // right route when a site renames it, without digging in the Network tab.
@@ -255,7 +311,7 @@
       // worked, but ChatGPT stayed stuck on "answer in progress" and the stop
       // button no longer responded. A rebuilt Response is not equivalent.
       const copy = response.clone();
-      measure(adapter, url, requestCopy, options, copy.body);
+      measure(adapter, url, requestCopy, options, headers, copy.body);
     } catch (error) {
       if (diagnostic()) console.warn("[optidome] interception dropped", error);
     }
@@ -264,9 +320,9 @@
   };
 
   // Deliberately not awaited: counting must not delay the answer on the page.
-  async function measure(adapter, url, requestCopy, options, stream) {
+  async function measure(adapter, url, requestCopy, options, headers, stream) {
     try {
-      const sent = await readSentBody(requestCopy, options);
+      const sent = await readSentBody(adapter, requestCopy, options);
       if (diagnostic()) console.log("[optidome] sent", sent);
 
       const { text, conversation } = await readStream(stream, adapter);
@@ -274,7 +330,7 @@
 
       report({
         provider: adapter.name,
-        model: adapter.model(sent),
+        model: adapter.model(sent, headers),
         conversation: adapter.conversation(sent, url) ?? conversation,
         firstTurn: adapter.firstTurn(sent),
         tokensSent: estimateTokens(message),
