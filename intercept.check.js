@@ -10,11 +10,34 @@ const vm = require("vm");
 const CHARS_PER_TOKEN = 3.8; // same estimate as intercept.js
 const tokens = (text) => (text ? Math.ceil(text.length / CHARS_PER_TOKEN) : 0);
 
+// A fixture holds one exchange, or several calls in the order the site made
+// them ("requests"). Bodies are text, or base64 when binary.
+const calls = (fixture) =>
+  (fixture.requests ?? [fixture]).map((call) => ({
+    url: call.url,
+    headers: call.headers,
+    body: call.bodyBase64 !== undefined ? Buffer.from(call.bodyBase64, "base64") : call.body,
+    response: call.responseBase64 !== undefined ? Buffer.from(call.responseBase64, "base64") : call.response,
+  }));
+
 async function run(fixture) {
   const measures = [];
+  let allSent;
+  const sent = new Promise((resolve) => (allSent = resolve));
   const window = {
-    // The site's own fetch: answers with the captured response.
-    fetch: async () => new Response(fixture.response, { status: 200 }),
+    // The site's own fetch: answers with the captured response, once every
+    // call has gone out (Claude's answer stream is opened before the send).
+    fetch: async (input) => {
+      const { response } = calls(fixture).find((call) => call.url === input.url) ?? {};
+      const stream = new ReadableStream({
+        async start(controller) {
+          await sent;
+          controller.enqueue(typeof response === "string" ? new TextEncoder().encode(response) : new Uint8Array(response ?? []));
+          controller.close();
+        },
+      });
+      return new Response(stream, { status: 200 });
+    },
     postMessage: (message) => measures.push(message),
     location: { origin: "https://example.test" },
   };
@@ -22,15 +45,24 @@ async function run(fixture) {
     window,
     localStorage: { getItem: () => null },
     Request,
+    Response,
     Headers,
+    URL,
+    DataView,
+    Uint8Array,
+    ArrayBuffer,
+    TextDecoder,
     TextDecoderStream,
     URLSearchParams,
     console,
   });
 
-  const request = new Request(fixture.url, { method: "POST", headers: fixture.headers, body: fixture.body });
-  const response = await window.fetch(request);
-  await response.text(); // the site reads its answer
+  const responses = [];
+  for (const call of calls(fixture)) {
+    responses.push(await window.fetch(new Request(call.url, { method: "POST", headers: call.headers, body: call.body })));
+  }
+  allSent();
+  await Promise.all(responses.map((response) => response.arrayBuffer())); // the site reads its answers
   for (let i = 0; i < 50 && measures.length === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
   return measures[0];
 }

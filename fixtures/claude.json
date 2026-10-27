@@ -1,0 +1,32 @@
+{
+  "seen": "2026-10-27, signed in. Rebuilt with the field numbers and the order of events of the real exchange, without the account, device and usage data it carried. Bodies are base64.",
+  "requests": [
+    {
+      "url": "https://claude.ai/claudeai-rpc/anthropic.bard.api.v1alpha.ConversationService/StreamTimeline",
+      "headers": { "content-type": "application/connect+proto" },
+      "bodyBase64": "AAAAAEcKJGUyZmRlNzNmLTQ3MjUtNDkyMi05Mzg3LWNmMzY0OGY4Y2MxZRgBIggwAbABAcABASoFZW4tVVNCDEV1cm9wZS9QYXJpcw==",
+      "responseBase64": "AAAAAEMKQQo/Ej0KJGUyZmRlNzNmLTQ3MjUtNDkyMi05Mzg3LWNmMzY0OGY4Y2MxZRgBMhMSEWNsYXVkZS1zb25uZXQtNS01AAAAAEMKQQo/Ej0KJGUyZmRlNzNmLTQ3MjUtNDkyMi05Mzg3LWNmMzY0OGY4Y2MxZRgCMhMSEWNsYXVkZS1zb25uZXQtNS01AAAAAAYKBDICCAQAAAAAMQovEi0KHWNibGtfMDExQ2dTY0pmQmZBNkhUWU5RSDRFN3RmEgxGcmFpc2UsIGZyYW0AAAAAKwopEicKHWNibGtfMDExQ2dTY0pmQmZBNkhUWU5RSDRFN3RmEgZib2lzZSwAAAAAMAouEiwKHWNibGtfMDExQ2dTY0pmQmZBNkhUWU5RSDRFN3RmEgsgZ3Jvc2VpbGxlLgAAAABGCkQKQipACh1jYmxrXzAxMUNnU2NKZkJmQTZIVFlOUUg0RTd0ZiABSh1GcmFpc2UsIGZyYW1ib2lzZSwgZ3Jvc2VpbGxlLgAAAABDCkEKPxI9CiRlMmZkZTczZi00NzI1LTQ5MjItOTM4Ny1jZjM2NDhmOGNjMWUYATITEhFjbGF1ZGUtc29ubmV0LTUtNQAAAAAGCgQyAggNAgAAADB7Im1ldGFkYXRhIjp7IlN0cmVhbS1DbG9zZS1SZWFzb24iOlsiY2FkZW5jZSJdfX0="
+    },
+    {
+      "url": "https://claude.ai/claudeai-rpc/anthropic.bard.api.v1alpha.ConversationService/PerformAction",
+      "headers": { "content-type": "application/proto" },
+      "bodyBase64": "CiYSJGUyZmRlNzNmLTQ3MjUtNDkyMi05Mzg3LWNmMzY0OGY4Y2MxZQ==",
+      "responseBase64": ""
+    },
+    {
+      "url": "https://claude.ai/claudeai-rpc/anthropic.bard.api.v1alpha.ConversationService/PerformAction",
+      "headers": { "content-type": "application/proto" },
+      "bodyBase64": "CioKAhABEiRlMmZkZTczZi00NzI1LTQ5MjItOTM4Ny1jZjM2NDhmOGNjMWUSPhonQ2l0ZSB0cm9pcyBmcnVpdHMgcm91Z2VzLCBlbiB1bmUgbGlnbmUuOhMSEWNsYXVkZS1zb25uZXQtNS01",
+      "responseBase64": ""
+    }
+  ],
+  "expect": {
+    "provider": "claude",
+    "model": "claude-sonnet-5-5",
+    "conversation": "e2fde73f-4725-4922-9387-cf3648f8cc1e",
+    "firstTurn": true,
+    "sentText": "Cite trois fruits rouges, en une ligne.",
+    "answer": "Fraise, framboise, groseille.",
+    "justThanks": false
+  }
+}

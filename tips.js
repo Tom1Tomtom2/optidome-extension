@@ -30,7 +30,7 @@
   }[location.hostname] ?? "ChatGPT";
 
   // The address of a new, still empty conversation, on each site.
-  const isNewConversation = (path) => ["/", "/new", "/app", "/chat"].includes(path.replace(/\/$/, "") || "/");
+  const isNewConversation = (path) => ["/", "/new", "/app", "/chat", "/work"].includes(path.replace(/\/$/, "") || "/");
 
   // The text follows Chrome's language (_locales), English by default.
   const t = (key, ...substitutions) => {
@@ -276,14 +276,18 @@
   shadow.append(style, card);
   let displayed = null; // { id, origin, values }
 
-  // Each site marks its theme its own way: read the page's background colour
-  // instead; otherwise, the system.
+  // Each site marks its theme its own way: read the page's background colour;
+  // when it is transparent (Le Chat), a "dark" or "light" class; otherwise,
+  // the system.
   function isDark() {
     for (const element of [document.body, document.documentElement]) {
       if (!element) continue;
       const [r, g, b, a = 1] = (getComputedStyle(element).backgroundColor.match(/[\d.]+/g) ?? []).map(Number);
       if (b !== undefined && a > 0) return 0.299 * r + 0.587 * g + 0.114 * b < 128;
     }
+    const classes = document.documentElement.classList;
+    if (classes.contains("dark")) return true;
+    if (classes.contains("light")) return false;
     return matchMedia("(prefers-color-scheme: dark)").matches;
   }
 
