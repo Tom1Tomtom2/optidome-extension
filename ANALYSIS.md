@@ -1,12 +1,14 @@
 # Optional local analysis — experimental prototype
 
-Based on upstream commit `2b5b5324fdafc0c3bf9c96e8131edbf3afe179cf` (0.4.0).
-Work is isolated on local branch `codex/analyse-locale`. No provider adapters,
-usage calculation or existing advice rules have been rewritten.
+Version 0.6.0 merges the optional local analyser with the multi-provider work
+through upstream commit `9c3314396e2f4cd1644c6803df1888f987cf5eb1` (0.5.0).
+The upstream interception adapters, provider pricing and translated advice
+are preserved. The new analyser is available on ChatGPT, Claude, Gemini and
+Le Chat, including the legacy chat.openai.com domain.
 
 ## User behaviour
 
-- A small “Choose a reasoning level” button is shown when the ChatGPT composer
+- A small “Choose a reasoning level” button is shown when a supported composer
   exists. No model runs and this new module does not read text while typing.
 - A trusted click takes a snapshot of the draft and opens an extension window.
   A one-use capability allows that window to retrieve it from the content
@@ -18,6 +20,9 @@ usage calculation or existing advice rules have been rewritten.
 - Editing the analysis copy does not edit the actual chat. Results are
   invalidated when this copy changes. The copy is explicitly labelled as a
   snapshot, not the live composer.
+- The analysis window names the source assistant. Provider-specific selectors
+  ignore hidden fields and unrelated search boxes, remember the last focused
+  supported editor without reading it, and handle composer replacement by SPAs.
 - Cancel terminates the worker. Closing the window also releases it. An idle
   worker is terminated after one minute. Hiding the chat button is persistent;
   the analyser remains available from the extension popup for manual input.
@@ -63,7 +68,7 @@ npm test
 ```
 
 Load `dist/` through Chrome → Extensions → Developer mode → Load unpacked.
-Reload ChatGPT. The model and runtime are included in this folder. No additional
+Reload the assistant tab. The model and runtime are included in this folder. No additional
 download occurs when users analyse a request. Distribution is therefore much
 larger than the existing extension; an optional separately installed language
 pack could be explored later, with explicit download consent and revised copy.
@@ -75,21 +80,24 @@ into the browser inference worker.
 
 ## Tests
 
-`npm test` runs the existing rules/grade/translation checks and routing-policy
-edge cases. `node tests/browser.mjs` loads the actual built extension in an
-isolated Chromium profile and serves a synthetic ChatGPT composer fixture.
+`npm test` runs the rules/grade/translation checks, the upstream captured-stream
+checks and routing-policy/provider edge cases. `npm run test:browser` loads the
+actual built extension in isolated Chromium profiles and serves synthetic
+ChatGPT, Claude, Gemini and Le Chat composer fixtures.
 Set `CHROMIUM_PATH` for your installed test Chromium. It exercises real local
 WASM inference, deliberate activation, text import, edits, cancellation,
 context/length abstention, unchanged chat input and absence of network/storage
-leaks. It writes `test-results/report.json` and a screenshot.
+leaks. It also tests hidden editors, unrelated search inputs and replacement
+of each provider's editor. It writes `test-results/report.json`,
+`test-results/providers-report.json` and screenshots.
 
-This does **not** validate a logged-in live ChatGPT account or all its editor
+This does **not** validate logged-in live provider accounts or all their editor
 variants. Browser selectors must be checked on real accounts before release.
 The authored development prompts are not an independent test set and do not
 measure the quality of downstream assistant responses. Full PC RAM consumption
 and Windows performance remain to be measured.
 
-Observed on 2026-10-27: 311 existing checks and 5 added policy tests passed.
+Initial prototype observed on 2026-10-27: 311 existing checks and 5 added policy tests passed.
 The browser integration test passed on macOS ARM64 / Chromium 139, CPU/WASM
 with one thread. On the authored set of 28 requests (24 task labels and 4
 abstention cases), the analyser gave 20 recommendations matching the authored
@@ -99,17 +107,26 @@ load plus analysis took 1.324 s; answered subsequent cases took 46–109 ms
 (median 49 ms), including browser automation overhead. These are development
 observations, not population accuracy estimates or PC performance guarantees.
 
-## Integration with the other provider session
+The 0.6.0 integration passed 320 rules/grade/translation checks, the 3 captured
+provider exchanges and 8 policy/provider unit tests. Both Chromium integration
+suites passed: the original analysis lifecycle checks and all 5 supported
+origins (4 providers), each with actual local model inference, unchanged draft,
+no automatic inference or outbound calls, and editor replacement handling.
+
+## Provider integration
 
 New code is under `analyse/`; small integration points are `manifest.json`, one
 `importScripts` in `background.js`, one popup button and prefixed locale keys.
-`intercept.js`, `bridge.js`, `rules.js`, `tips.js` and `grade.js` are untouched.
+The provider adapter work in `intercept.js`, `tips.js` and `grade.js` was merged
+without rewriting it. `analyse/providers.js` owns the analysis origin allowlist
+and editor selectors. Both the launcher and the background opener use it;
+tests verify its origins match the manifest and the counted provider origins.
 
 The policy contract is `{ level: 'quick' | 'standard' | 'deep' | null,
 reason: string, notes: string[] }`. Keep provider availability, effort names,
 editor access and eventual user-confirmed selection outside this policy.
 Do not assume a service's “fast model” and “low reasoning effort” are equivalent.
-The other session can implement Claude/Mistral/Gemini adapters independently.
+Further provider integrations can extend that registry, manifest and fixtures.
 
 ## Audit of the existing design
 
@@ -119,13 +136,14 @@ The other session can implement Claude/Mistral/Gemini adapters independently.
    “Excellent usage” unless a validated broader rubric supports it. Preserve
    useful context rather than encouraging a reset merely to improve a grade.
 2. **Costs are a scenario, not an observed bill or guaranteed lower bound.**
-   `grade.js:51` applies one model's price to all collected providers/models;
-   `background.js:60` accumulates all observed turns. It does not reconstruct
+   `grade.js` now applies a separate reference model price per provider, but
+   does not account for the actual selected model. `background.js` accumulates
+   all observed turns. It does not reconstruct
    branches, retries, removals, summarisation or actual cache use. Rephrase as
    “illustrative API equivalent with these assumptions”; never infer savings
    on a fixed-price chat subscription from those figures. A model's own claim
    about its identity is not a verified pricing reference.
-3. **Monthly conversation counts change retroactively.** `grade.js:86` counts
+3. **Monthly conversation counts change retroactively.** `usageForMonth` counts
    each registry entry using its latest `seenOn`. A conversation used in October
    and November disappears from October's count. Store per-month conversation
    membership if historical reports are intended to remain stable.
@@ -146,7 +164,8 @@ The other session can implement Claude/Mistral/Gemini adapters independently.
    one-tip-per-conversation gate, so reference tips cannot hide it.
 
 These audit findings are recorded, not silently fixed along with the analyser.
-That keeps this branch reviewable and limits conflicts with the provider work.
+The changes here integrate optional analysis with the provider work and keep
+unrelated behavioural changes separate.
 
 ## Evidence needed before recommending production use
 

@@ -1,0 +1,19 @@
+{
+  "seen": "2026-10-27, signed out. Only the fields the adapter reads are kept; the rest is null.",
+  "url": "https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?bl=boq_gemini-web-uiserver_20261026.01_p0&f.sid=0&hl=fr&_reqid=0&rt=c",
+  "headers": {
+    "content-type": "application/x-www-form-urlencoded;charset=utf-8",
+    "x-goog-ext-525001261-jspb": "[1,null,null,null,\"cf41b0e0dd7d53e5\",null,null,0,[4,33,6,16,19,20,4,33,6,16,19,20],null,null,1,null,null,6,null,\"E18EEEEC-ABB8-4D86-B659-A99C05B82A20\",[\"boq_gemini-web-uiserver_20261026.01_p0\"],null,[[18,912200000],[1793096911,538000000]]]"
+  },
+  "body": "f.req=%5Bnull%2C%22%5B%5B%5C%22Merci%5C%22%2C0%2Cnull%2Cnull%2Cnull%2Cnull%2C0%5D%2C%5B%5C%22fr%5C%22%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%5D%22%5D",
+  "response": ")]}'\n\n177\n[[\"wrb.fr\",null,\"[null,[\\\"c_54a28bd08a32eb0b\\\",\\\"r_07319a3c2b94384a\\\"],null,null,null]\"]]\n5365\n[[\"wrb.fr\",null,\"[null,[\\\"c_54a28bd08a32eb0b\\\",\\\"r_07319a3c2b94384a\\\"],null,null,[[\\\"rc_ab7a8a9f6e370d3b\\\",[\\\"De rien\\\"]]]]\"]]\n5475\n[[\"wrb.fr\",null,\"[null,[\\\"c_54a28bd08a32eb0b\\\",\\\"r_07319a3c2b94384a\\\"],null,null,[[\\\"rc_ab7a8a9f6e370d3b\\\",[\\\"De rien ! N'hésite pas si tu as d'autres questions ou besoin d\\\"]]]]\"]]\n5531\n[[\"wrb.fr\",null,\"[null,[\\\"c_54a28bd08a32eb0b\\\",\\\"r_07319a3c2b94384a\\\"],null,null,[[\\\"rc_ab7a8a9f6e370d3b\\\",[\\\"De rien ! N'hésite pas si tu as d'autres questions ou besoin d'aide pour quoi que ce soit.\\\"]]]]\"]]\n5531\n[[\"wrb.fr\",null,\"[null,[\\\"c_54a28bd08a32eb0b\\\",\\\"r_07319a3c2b94384a\\\"],null,null,[[\\\"rc_ab7a8a9f6e370d3b\\\",[\\\"De rien ! N'hésite pas si tu as d'autres questions ou besoin d'aide pour quoi que ce soit.\\\"]]]]\"]]\n5547\n[[\"wrb.fr\",null,\"[null,[\\\"c_54a28bd08a32eb0b\\\",\\\"r_07319a3c2b94384a\\\"],null,null,[[\\\"rc_ab7a8a9f6e370d3b\\\",[\\\"De rien ! N'hésite pas si tu as d'autres questions ou besoin d'aide pour quoi que ce soit.\\\"]]]]\"]]\n138\n[[\"wrb.fr\",null,\"[null,[\\\"c_54a28bd08a32eb0b\\\",\\\"r_07319a3c2b94384a\\\"],null,null,null]\"]]\n122\n[[\"wrb.fr\",null,null,null,null,[13,null,[[\"type.googleapis.com/assistant.boq.bard.application.BardErrorInfo\",[1096]]]]]]\n60\n[[\"di\",1992],[\"af.httprm\",1991,\"-4956697410328585576\",11]]\n28\n[[\"e\",11,null,null,28033]]\n",
+  "expect": {
+    "provider": "gemini",
+    "model": "cf41b0e0dd7d53e5",
+    "conversation": "c_54a28bd08a32eb0b",
+    "firstTurn": true,
+    "sentText": "Merci",
+    "answer": "De rien ! N'hésite pas si tu as d'autres questions ou besoin d'aide pour quoi que ce soit.",
+    "justThanks": true
+  }
+}

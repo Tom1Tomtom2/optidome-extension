@@ -126,31 +126,266 @@
     },
   };
 
+  // --- Protocol buffers, read without their schema (Claude) ------------------
+  //
+  // A message is a list of fields: a number, then a varint or a length and
+  // bytes. Field numbers below were read on the real traffic.
+
+  function fields(bytes) {
+    const out = [];
+    let i = 0;
+    const varint = () => {
+      let value = 0;
+      for (let shift = 0; ; shift += 7) {
+        const byte = bytes[i++];
+        if (byte === undefined) throw new Error("truncated");
+        value += (byte & 0x7f) * 2 ** shift;
+        if (!(byte & 0x80)) return value;
+      }
+    };
+    while (i < bytes.length) {
+      const key = varint();
+      const wire = key % 8;
+      if (wire === 0) out.push([Math.floor(key / 8), varint()]);
+      else if (wire === 2) {
+        const length = varint();
+        out.push([Math.floor(key / 8), bytes.subarray(i, i + length)]);
+        i += length;
+      } else if (wire === 1) i += 8;
+      else if (wire === 5) i += 4;
+      else throw new Error("not a message");
+    }
+    return out;
+  }
+
+  // The first value at this path of field numbers, or undefined.
+  function pick(bytes, ...path) {
+    let current = bytes;
+    for (const number of path) {
+      if (!(current instanceof Uint8Array)) return undefined;
+      try {
+        current = fields(current).find(([field]) => field === number)?.[1];
+      } catch (error) {
+        return undefined;
+      }
+    }
+    return current;
+  }
+
+  const utf8 = new TextDecoder();
+  const pickText = (bytes, ...path) => {
+    const value = pick(bytes, ...path);
+    return value instanceof Uint8Array ? utf8.decode(value) : undefined;
+  };
+
+  // Format seen on 2026-10-27 (Connect RPC, protocol buffers). Two calls:
+  // - PerformAction sends the message: [2][3] is its text, [2][7][2] the
+  //   model, [1][2] the conversation, and [1][1][2] counts the turns (1 on
+  //   the first message).
+  // - StreamTimeline, opened before the send and kept open, carries events in
+  //   envelopes (1 flag byte, 4 length bytes). [1][1][2] is the conversation's
+  //   state: [1] its id, [3] its status, 2 while answering then 1. [1][1][5]
+  //   is a finished block of the answer, its text in [9].
+  // So a send is remembered until its conversation goes from 2 back to 1, and
+  // an answer that ends first (the send's body is read in the background)
+  // waits a few seconds for its send. An older answer came from elsewhere
+  // (another tab, the desktop app) and is dropped.
+  const claudeSends = new Map(); // conversation -> what was sent
+  const claudeAnswers = new Map(); // conversation -> { answer, at }
+  const ANSWER_WAIT_MS = 5000;
+
+  function pairClaude(conversation) {
+    const sent = claudeSends.get(conversation);
+    const waiting = claudeAnswers.get(conversation);
+    if (!sent || !waiting) return;
+    claudeSends.delete(conversation);
+    claudeAnswers.delete(conversation);
+    if (Date.now() - waiting.at > ANSWER_WAIT_MS) return;
+    report({
+      provider: "claude",
+      model: sent.model,
+      conversation,
+      firstTurn: sent.firstTurn,
+      tokensSent: estimateTokens(sent.text),
+      tokensReceived: estimateTokens(waiting.answer),
+      justThanks: isJustThanks(sent.text),
+    });
+  }
+
   const CLAUDE = {
     name: "claude",
     matches: (url, method) =>
-      method === "POST" && /\/chat_conversations\/[^/]+\/completion/.test(url),
-    model: (sent) => sent?.model ?? "unknown",
-    conversation: (sent, url) => {
-      const found = /\/chat_conversations\/([^/]+)\//.exec(url ?? "");
-      return found ? found[1] : sent?.conversation_uuid ?? null;
+      method === "POST" && /ConversationService\/(PerformAction|StreamTimeline)/.test(url),
+
+    async onRequest(url, requestCopy) {
+      if (!url.includes("/PerformAction") || !requestCopy) return;
+      const body = new Uint8Array(await requestCopy.arrayBuffer());
+      const text = pickText(body, 2, 3);
+      const conversation = pickText(body, 1, 2);
+      if (text === undefined || !conversation) return; // another action than a send
+      claudeSends.set(conversation, {
+        text,
+        model: pickText(body, 2, 7, 2) ?? "unknown",
+        firstTurn: pick(body, 1, 1, 2) === 1,
+      });
+      if (diagnostic()) console.log("[optidome] sent", conversation, claudeSends.get(conversation));
+      pairClaude(conversation);
     },
-    // On the first turn, Claude names a known null id as the parent.
-    firstTurn: (sent) => sent?.parent_message_uuid === "00000000-0000-4000-8000-000000000000",
-    sentMessage: (sent) => sent?.prompt ?? "",
+
+    async onResponse(url, stream) {
+      if (!url.includes("/StreamTimeline")) return;
+      const reader = stream.getReader();
+      let buffer = new Uint8Array(0);
+      let conversation = null;
+      let answering = false;
+      const blocks = new Map(); // block id -> finished text
+
+      for (;;) {
+        let chunk;
+        try {
+          chunk = await reader.read();
+        } catch (error) {
+          return; // the site closed the stream
+        }
+        if (chunk.done) return;
+        const joined = new Uint8Array(buffer.length + chunk.value.length);
+        joined.set(buffer);
+        joined.set(chunk.value, buffer.length);
+        buffer = joined;
+
+        while (buffer.length >= 5) {
+          const length = new DataView(buffer.buffer, buffer.byteOffset).getUint32(1);
+          if (buffer.length < 5 + length) break;
+          const flags = buffer[0];
+          const message = buffer.slice(5, 5 + length);
+          buffer = buffer.slice(5 + length);
+          if (flags & 2) continue; // end of stream, as JSON
+
+          const state = pick(message, 1, 1, 2);
+          if (state) {
+            conversation = pickText(state, 1) ?? conversation;
+            const status = pick(state, 3);
+            if (status === 2) answering = true;
+            if (status === 1 && answering) {
+              answering = false;
+              claudeAnswers.set(conversation, { answer: [...blocks.values()].join(""), at: Date.now() });
+              blocks.clear();
+              pairClaude(conversation);
+            }
+          }
+
+          // Blocks seen outside an answer are history the stream replays.
+          const block = pick(message, 1, 1, 5);
+          if (block && answering) blocks.set(pickText(block, 1), pickText(block, 9) ?? "");
+          if (diagnostic()) console.log("[optidome] received", { conversation, answering, block: Boolean(block) });
+        }
+      }
+    },
+  };
+
+  // Format seen on 2026-10-27. The request is JSON: the text is in
+  // content[] on the first message (mode "create"), in messageInput[] with a
+  // chatId afterwards (mode "append"); the model is modelConfig.model_alias.
+  // The answer is lines "<number>:<JSON>". The bootstrap line gives the
+  // conversation id; then the assistant message is built by JSON patches on
+  // its contentChunks, where the model's reasoning carries _context.type
+  // "reasoning". Only the visible answer is counted, like on ChatGPT.
+  function applyPatch(target, { op, path, value }) {
+    const keys = path.split("/").slice(1);
+    const last = keys.pop();
+    const parent = keys.reduce((node, key) => node?.[key], target);
+    if (parent == null) return;
+    if (op === "remove") Array.isArray(parent) ? parent.splice(Number(last), 1) : delete parent[last];
+    else if (op === "add" && Array.isArray(parent)) parent.splice(last === "-" ? parent.length : Number(last), 0, value);
+    else if (op === "append") parent[last] = (parent[last] ?? "") + value;
+    else parent[last] = value;
+  }
+
+  const MISTRAL = {
+    name: "mistral",
+    matches: (url, method) => method === "POST" && /\/api\/chat(\?|$)/.test(url),
+    model: (sent) => sent?.modelConfig?.model_alias ?? "unknown",
+    conversation: (sent) => sent?.chatId ?? null,
+    firstTurn: (sent) => sent?.mode === "create",
+    sentMessage: (sent) =>
+      (sent?.content ?? sent?.messageInput ?? [])
+        .filter((part) => part?.type === "text")
+        .map((part) => part.text)
+        .join("\n"),
+    parseLine: (line) => {
+      const found = /^\d+:(.*)$/.exec(line);
+      const object = found && JSON.parse(found[1]);
+      return object?.json ? [object.json] : [];
+    },
     accumulator() {
-      let text = "";
+      let conversation = null;
+      const messages = {}; // by id, rebuilt from the patches
       return {
-        line(object) {
-          const added = object?.delta?.text ?? object?.completion;
-          if (typeof added === "string") text += added;
+        line(event) {
+          if (event.type === "bootstrap") conversation = event.chat?.id ?? conversation;
+          if (event.type !== "message") return;
+          for (const patch of event.patches ?? []) {
+            if (patch.path === "/") messages[event.messageId] = patch.value;
+            else if (messages[event.messageId]) applyPatch(messages[event.messageId], patch);
+          }
         },
-        result: () => ({ text, conversation: null }),
+        result: () => ({
+          text: Object.values(messages)
+            .filter((message) => message?.role === "assistant")
+            .flatMap((message) => message.contentChunks ?? [])
+            .filter((chunk) => chunk?.type === "text" && chunk?._context?.type !== "reasoning")
+            .map((chunk) => chunk.text)
+            .join(""),
+          conversation,
+        }),
       };
     },
   };
 
-  const ADAPTERS = [CHATGPT, CLAUDE];
+  // Format seen on 2026-10-27, signed out. The request is a form:
+  //   f.req=[null,"<JSON string>"]
+  // whose inner array holds the message at [0][0], and from the second turn on
+  // [conversation, answer, draft] ids at [2]. The model is a code in a header.
+  // Signed out, Gemini opens a new conversation for every message.
+  const GEMINI = {
+    name: "gemini",
+    matches: (url, method) =>
+      method === "POST" && url.includes(".BardFrontendService/StreamGenerate"),
+    parseSent: (body) => JSON.parse(JSON.parse(new URLSearchParams(body).get("f.req"))[1]),
+    model: (sent, headers) => {
+      try {
+        return JSON.parse(headers.get("x-goog-ext-525001261-jspb"))[4] ?? "unknown";
+      } catch (error) {
+        return "unknown";
+      }
+    },
+    conversation: (sent) => sent?.[2]?.[0] ?? null,
+    firstTurn: (sent) => !sent?.[2]?.[0],
+    sentMessage: (sent) => sent?.[0]?.[0] ?? "",
+    // The answer is not SSE: after ")]}'", each block is a line with its
+    // length, then a line [["wrb.fr",null,"<JSON string>"]]. Each block repeats
+    // the whole answer so far at [4][0][1][0], and the conversation id at [1][0].
+    parseLine: (line) =>
+      line.startsWith("[[")
+        ? JSON.parse(line)
+            .filter((item) => item?.[0] === "wrb.fr" && typeof item[2] === "string")
+            .map((item) => JSON.parse(item[2]))
+        : [],
+    accumulator() {
+      let text = "";
+      let conversation = null;
+      return {
+        line(inner) {
+          if (typeof inner?.[1]?.[0] === "string") conversation = inner[1][0];
+          const answer = inner?.[4]?.[0]?.[1]?.[0];
+          if (typeof answer === "string" && answer.length >= text.length) text = answer;
+        },
+        result: () => ({ text, conversation }),
+      };
+    },
+  };
+
+  const ADAPTERS = [CHATGPT, CLAUDE, GEMINI, MISTRAL];
 
   // --- Reading the stream ----------------------------------------------------
 
@@ -177,6 +412,17 @@
       const lines = rest.split("\n");
       rest = lines.pop() ?? "";
       for (const line of lines) {
+        if (adapter.parseLine) {
+          try {
+            for (const object of adapter.parseLine(line)) {
+              if (diagnostic()) console.log("[optidome] received", object);
+              accumulator.line(object);
+            }
+          } catch (error) {
+            // A line the adapter does not understand: skip it.
+          }
+          continue;
+        }
         if (!line.startsWith("data:")) continue;
         const payload = line.slice(5).trim();
         if (payload === "[DONE]") {
@@ -196,12 +442,12 @@
     return accumulator.result();
   }
 
-  async function readSentBody(requestCopy, options) {
+  async function readSentBody(adapter, requestCopy, options) {
     try {
-      if (options && typeof options.body === "string") return JSON.parse(options.body);
-      if (requestCopy) return JSON.parse(await requestCopy.text());
+      const body = typeof options?.body === "string" ? options.body : requestCopy ? await requestCopy.text() : null;
+      if (body != null) return (adapter.parseSent ?? JSON.parse)(body);
     } catch (error) {
-      // No body, or not JSON.
+      // No body, or not in the expected shape.
     }
     return null;
   }
@@ -226,13 +472,22 @@
     let adapter = null;
     let url = "";
     let requestCopy = null;
+    let headers = null;
 
     try {
-      url = typeof input === "string" ? input : input?.url ?? "";
+      url = typeof input === "string" ? input : input instanceof URL ? input.href : input?.url ?? "";
       const method = (options?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
 
       adapter = ADAPTERS.find((candidate) => candidate.matches(url, method)) ?? null;
       if (adapter && input instanceof Request) requestCopy = input.clone();
+      if (adapter) headers = new Headers(options?.headers ?? (input instanceof Request ? input.headers : undefined));
+      // Read before the answer comes back: Claude's answer arrives on another
+      // call, already open, and must find the send waiting.
+      if (adapter?.onRequest) {
+        const body = options?.body ?? null;
+        const bytes = body instanceof Uint8Array || body instanceof ArrayBuffer ? new Response(body) : requestCopy;
+        adapter.onRequest(url, bytes).catch(() => {});
+      }
 
       // In diagnostic mode, every send is announced. This is how to find the
       // right route when a site renames it, without digging in the Network tab.
@@ -255,7 +510,8 @@
       // worked, but ChatGPT stayed stuck on "answer in progress" and the stop
       // button no longer responded. A rebuilt Response is not equivalent.
       const copy = response.clone();
-      measure(adapter, url, requestCopy, options, copy.body);
+      if (adapter.onResponse) adapter.onResponse(url, copy.body).catch(() => {});
+      else measure(adapter, url, requestCopy, options, headers, copy.body);
     } catch (error) {
       if (diagnostic()) console.warn("[optidome] interception dropped", error);
     }
@@ -264,9 +520,9 @@
   };
 
   // Deliberately not awaited: counting must not delay the answer on the page.
-  async function measure(adapter, url, requestCopy, options, stream) {
+  async function measure(adapter, url, requestCopy, options, headers, stream) {
     try {
-      const sent = await readSentBody(requestCopy, options);
+      const sent = await readSentBody(adapter, requestCopy, options);
       if (diagnostic()) console.log("[optidome] sent", sent);
 
       const { text, conversation } = await readStream(stream, adapter);
@@ -274,7 +530,7 @@
 
       report({
         provider: adapter.name,
-        model: adapter.model(sent),
+        model: adapter.model(sent, headers),
         conversation: adapter.conversation(sent, url) ?? conversation,
         firstTurn: adapter.firstTurn(sent),
         tokensSent: estimateTokens(message),

@@ -1,6 +1,8 @@
 // Separate from the existing usage observer. No text is read while typing.
 (() => {
-  const SELECTOR = '#prompt-textarea, textarea[data-id="root"]';
+  const provider = OptidomeProviders.forUrl(location.href);
+  if (!provider) return;
+  const SELECTOR = provider.selectors.join(', ');
   const t = key => chrome.i18n.getMessage(key);
   const host = document.createElement('div');
   host.id = 'optidome-analysis-launcher';
@@ -13,7 +15,26 @@
   button.title = t('analysisOptional');
   shadow.append(style, button);
   document.documentElement.append(host);
-  const editor = () => [...document.querySelectorAll(SELECTOR)].find(el => el.isConnected && el.getClientRects().length && el.getAttribute('contenteditable') !== 'false');
+  let lastEditor = null;
+  const visible = el => el?.isConnected && el.getClientRects().length &&
+    getComputedStyle(el).visibility !== 'hidden' && !el.closest('[aria-hidden="true"], [inert]') &&
+    !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true' &&
+    el.getAttribute('contenteditable') !== 'false';
+  const editor = () => {
+    if (visible(lastEditor) && lastEditor.matches(SELECTOR)) return lastEditor;
+    // Prefer specific provider selectors. Never choose an arbitrary editable
+    // element when several equally plausible composers are visible.
+    for (const selector of provider.selectors) {
+      const fields = [...document.querySelectorAll(selector)].filter(visible);
+      if (fields.length === 1) return fields[0];
+      if (fields.length > 1) return null;
+    }
+    return null;
+  };
+  document.addEventListener('focusin', event => {
+    const field = event.target?.closest?.(SELECTOR);
+    if (field && visible(field)) { lastEditor = field; update(); }
+  }, true);
   let pending = null;
   let expiry;
   let enabled = true;
@@ -22,7 +43,7 @@
   const observer = new MutationObserver(() => {
     if (!scheduled) { scheduled = true; setTimeout(update, 200); }
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'aria-hidden', 'contenteditable', 'disabled', 'readonly', 'aria-disabled', 'inert'] });
   chrome.storage.local.get('analysisButtonHidden').then(data => { enabled = !data.analysisButtonHidden; update(); }).catch(() => { button.hidden = true; });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.analysisButtonHidden) { enabled = !changes.analysisButtonHidden.newValue; update(); }
@@ -53,6 +74,6 @@
     const text = pending.text;
     pending = null;
     clearTimeout(expiry);
-    respond({ ok: true, text });
+    respond({ ok: true, text, provider: provider.name });
   });
 })();

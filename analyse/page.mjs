@@ -70,6 +70,7 @@ if (params.has('tab') && Number.isInteger(tab) && params.get('token')) {
     const response = await chrome.tabs.sendMessage(tab, { type: 'optidome-read-draft', token: params.get('token') });
     if (!response?.ok || typeof response.text !== 'string') throw new Error('no draft');
     $('draft').value = response.text;
+    if (typeof response.provider === 'string') document.querySelector('label[for="draft"]').textContent = chrome.i18n.getMessage('analysisDraftFrom', [response.provider]);
   } catch { $('snapshot').textContent = t('analysisPaste'); }
 } else { $('snapshot').textContent = t('analysisPaste'); }
 // Keep capability tokens out of reloads and navigation history.

@@ -135,11 +135,11 @@ function showUsage(usage) {
   amount.textContent = euroRange(usage.euros);
   cost.append(t("costBefore"), " ", amount, ".");
 
-  const { PRICES, DOLLARS_PER_EURO, RATE_DATE } = Grade;
+  const { PRICES, PRICES_RECORDED_ON, DOLLARS_PER_EURO, RATE_DATE } = Grade;
   document.getElementById("calc-text").textContent = t(
     "calcText",
-    PRICES.model,
-    longDate(PRICES.recordedOn),
+    usage.providers.map((provider) => t("modelFor", PRICES[provider].model, PRICES[provider].assistant)).join(", "),
+    longDate(PRICES_RECORDED_ON),
     longDate(RATE_DATE),
     DOLLARS_PER_EURO.toLocaleString(LANG, { maximumFractionDigits: 4 })
   );
@@ -276,7 +276,7 @@ async function downloadShareImage(grade, habitCount) {
   });
   c.textAlign = "left";
 
-  // The bars: what ChatGPT rereads, message after message.
+  // The bars: what the AI rereads, message after message.
   const heights = [12, 20, 32, 46, 64, 86, 112, 142, 176, 212, 250];
   const colors = ["#ECEBE8", "#ECEBE8", "#ECEBE8", "#ECEBE8", "#D9D8D3", "#D9D8D3", "#D9D8D3", "#131312", "#131312", "#FF6D00", "#FF6D00"];
   heights.forEach((height, i) => {

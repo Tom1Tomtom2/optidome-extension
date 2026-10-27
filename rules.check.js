@@ -98,6 +98,13 @@ check(0.97, cents(usage.euros.low), "low end of the range");
 // High: (640,000 x 2 + 100,000 x 10) / 1e6 = $2.28, x 1.15, / 1.1355.
 check(2.31, cents(usage.euros.high), "high end of the range");
 check(null, G.usageForMonth({}, {}, "2026-10").euros, "month without messages");
+// Each assistant is priced with its own model: 100,000 tokens typed in a new
+// conversation on Gemini, 0 reread, 50,000 out.
+const gemini = G.usageForMonth({ "2026-10-05": { gemini: { x: { turns: 1, typed: 100000, billed: 100000, output: 50000 } } } }, {}, "2026-10");
+check(["gemini"], gemini.providers, "assistants used");
+// (100,000 x 0.75 + 50,000 x 3.75) / 1e6 = $0.2625, x 0.85, / 1.1355.
+check(0.2, cents(gemini.euros.low), "Gemini low end");
+check(["chatgpt"], usage.providers, "ChatGPT only");
 
 // The translations: both languages have the same keys, and every key the
 // code asks for exists. Keys built from a variable are listed by hand.
