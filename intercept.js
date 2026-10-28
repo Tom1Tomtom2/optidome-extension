@@ -111,7 +111,7 @@
     deep: (sent) =>
       (Array.isArray(sent?.system_hints) && sent.system_hints.includes("reason")) ||
       Boolean(sent?.thinking_effort) ||
-      /-(thinking|pro)/.test(sent?.model ?? ""),
+      /-(thinking|pro)\b/.test(sent?.model ?? ""),
     regenerated: (sent) => sent?.action === "variant",
     conversation: (sent) => sent?.conversation_id ?? null,
     // On the very first turn, ChatGPT has no conversation id yet and names
