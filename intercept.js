@@ -106,7 +106,12 @@
     model: (sent) => sent?.model ?? "unknown",
     // Seen on 2026-10-22, signed in: the "Think" switch sends
     // system_hints ["reason"], and "Try again" sends action "variant".
-    deep: (sent) => Array.isArray(sent?.system_hints) && sent.system_hints.includes("reason"),
+    // Paid accounts (2026-10-28) pick a reasoning model instead:
+    // "gpt-6-thinking" with thinking_effort, or "gpt-6-pro".
+    deep: (sent) =>
+      (Array.isArray(sent?.system_hints) && sent.system_hints.includes("reason")) ||
+      Boolean(sent?.thinking_effort) ||
+      /-(thinking|pro)/.test(sent?.model ?? ""),
     regenerated: (sent) => sent?.action === "variant",
     conversation: (sent) => sent?.conversation_id ?? null,
     // On the very first turn, ChatGPT has no conversation id yet and names
@@ -114,6 +119,13 @@
     // where the accumulator picks it up.
     firstTurn: (sent) =>
       sent?.conversation_id == null || sent?.parent_message_id === "client-created-root",
+    // A long paste becomes an attachment (is_big_paste) and leaves the
+    // message: its size in bytes stands for its length (2026-10-28).
+    attachedChars: (sent) =>
+      (sent?.messages ?? [])
+        .flatMap((message) => message?.metadata?.attachments ?? [])
+        .filter((attachment) => attachment?.is_big_paste)
+        .reduce((sum, attachment) => sum + (Number(attachment.size) || 0), 0),
     sentMessage: (sent) =>
       (sent?.messages ?? [])
         .flatMap((message) => message?.content?.parts ?? [])
@@ -708,7 +720,7 @@
         model: adapter.model(sent, headers),
         conversation: adapter.conversation(sent, url) ?? conversation,
         firstTurn: adapter.firstTurn(sent),
-        tokensSent: estimateTokens(message),
+        tokensSent: estimateTokens(message) + Math.ceil((adapter.attachedChars?.(sent) ?? 0) / CHARS_PER_TOKEN),
         tokensReceived: estimateTokens(text),
         justThanks: isJustThanks(message),
         followUpFix: isFollowUpFix(message),

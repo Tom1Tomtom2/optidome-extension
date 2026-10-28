@@ -83,7 +83,7 @@ async function run(fixture, testMode = false) {
   let checked = 0;
   for (const file of fs.readdirSync(`${__dirname}/fixtures`).filter((name) => name.endsWith(".json"))) {
     const fixture = JSON.parse(fs.readFileSync(`${__dirname}/fixtures/${file}`, "utf8"));
-    const { sentText, answer, ...expected } = fixture.expect;
+    const { sentText, answer, attachedTokens = 0, ...expected } = fixture.expect;
     const measure = await run(fixture);
     const actual = measure && {
       provider: measure.provider,
@@ -95,7 +95,7 @@ async function run(fixture, testMode = false) {
       deep: measure.deep === true,
       regenerated: measure.regenerated === true,
     };
-    const wanted = { ...expected, tokensSent: tokens(sentText), tokensReceived: tokens(answer) };
+    const wanted = { ...expected, tokensSent: tokens(sentText) + attachedTokens, tokensReceived: tokens(answer) };
     const got = measure && { ...actual, tokensSent: measure.tokensSent, tokensReceived: measure.tokensReceived };
     if (JSON.stringify(Object.entries(wanted).sort()) !== JSON.stringify(Object.entries(got ?? {}).sort())) {
       throw new Error(`${file}: expected ${JSON.stringify(wanted)}, got ${JSON.stringify(got)}`);

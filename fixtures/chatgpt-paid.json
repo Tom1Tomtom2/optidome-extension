@@ -1,0 +1,22 @@
+{
+  "seen": "Rebuilt from a test mode report of 2026-10-28 (paid account): a reasoning model with thinking_effort, and a long paste sent as an attachment (is_big_paste, size in bytes).",
+  "url": "https://chatgpt.com/backend-api/f/conversation",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "{\"action\": \"next\", \"messages\": [{\"content\": {\"parts\": [\"Résume ce texte\"]}, \"metadata\": {\"attachments\": [{\"id\": \"file_0\", \"is_big_paste\": true, \"size\": 3800}]}}], \"model\": \"gpt-6-thinking\", \"thinking_effort\": \"extended\", \"conversation_id\": \"6720b1c4-0000-4000-8000-000000000001\", \"parent_message_id\": \"m1\"}",
+  "response": "data: {\"v\": {\"message\": {\"author\": {\"role\": \"assistant\"}, \"content\": {\"content_type\": \"text\", \"parts\": [\"Rome,\"]}}}, \"c\": 0}\n\ndata: {\"o\": \"patch\", \"v\": [{\"p\": \"/message/content/parts/0\", \"o\": \"append\", \"v\": \" capitale.\"}]}\n\ndata: {\"conversation_id\": \"6720b1c4-0000-4000-8000-000000000001\"}\n\ndata: [DONE]\n\n",
+  "expect": {
+    "provider": "chatgpt",
+    "model": "gpt-6-thinking",
+    "conversation": "6720b1c4-0000-4000-8000-000000000001",
+    "firstTurn": false,
+    "sentText": "Résume ce texte",
+    "answer": "Rome, capitale.",
+    "justThanks": false,
+    "followUpFix": false,
+    "deep": true,
+    "regenerated": false,
+    "attachedTokens": 1000
+  }
+}
