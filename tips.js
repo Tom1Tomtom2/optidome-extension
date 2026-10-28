@@ -1,6 +1,6 @@
 "use strict";
 
-// Shows the tips on ChatGPT, Claude, Gemini and Le Chat. Runs in the
+// Shows the tips on ChatGPT, Claude, Gemini and Mistral. Runs in the
 // extension's isolated world, after rules.js and dome.js (same scope).
 //
 // Two sources of tips:
@@ -14,7 +14,7 @@
 // in the message box.
 
 (() => {
-  // ChatGPT and Gemini mark their box as a textbox; Claude and Le Chat use a
+  // ChatGPT and Gemini mark their box as a textbox; Claude and Mistral use a
   // ProseMirror editor without that role.
   const BOX = '[contenteditable="true"][role="textbox"], .ProseMirror[contenteditable="true"], textarea';
   // The two switches of the popup's settings, both on by default.
@@ -52,7 +52,7 @@
     "chat.openai.com": "ChatGPT",
     "claude.ai": "Claude",
     "gemini.google.com": "Gemini",
-    "chat.mistral.ai": "Le Chat",
+    "chat.mistral.ai": "Mistral",
   }[location.hostname] ?? "ChatGPT";
   const SITE_ID = OptidomeProviders.forUrl(location.href)?.id ?? "chatgpt";
 
@@ -346,7 +346,7 @@
   let displayed = null; // { id, origin, values }
 
   // Each site marks its theme its own way: read the page's background colour;
-  // when it is transparent (Le Chat), a "dark" or "light" class; otherwise,
+  // when it is transparent (Mistral), a "dark" or "light" class; otherwise,
   // the system.
   function isDark() {
     for (const element of [document.body, document.documentElement]) {

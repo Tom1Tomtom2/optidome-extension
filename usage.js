@@ -4,7 +4,7 @@ const Usage = (() => {
     chatgpt: {name:'ChatGPT', model:'gpt-6.1-sol', input:2, cached:0.1, output:10, source:'https://developers.openai.com/api/docs/models/gpt-6.1-sol'},
     claude: {name:'Claude', model:'Claude Sonnet 5.5', input:2, cached:0.1, output:10, source:'https://platform.claude.com/docs/en/about-claude/pricing'},
     gemini: {name:'Gemini', model:'Gemini 3.8 Flash', input:0.75, cached:0.075, output:3.75, source:'https://ai.google.dev/gemini-api/docs/pricing'},
-    mistral: {name:'Le Chat', model:'Mistral Medium 3.5', input:1.5, cached:0.15, output:7.5, source:'https://docs.mistral.ai/inference/pricing'},
+    mistral: {name:'Mistral', model:'Mistral Medium 3.5', input:1.5, cached:0.15, output:7.5, source:'https://docs.mistral.ai/inference/pricing'},
   };
   const usdPerEuro=1.1188, rateDate='2026-10-26', priceDate='2026-10-27';
   const dateKey = (date=new Date()) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;

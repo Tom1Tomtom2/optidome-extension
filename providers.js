@@ -5,7 +5,7 @@ const OptidomeProviders = (() => {
     { id: 'chatgpt', name: 'ChatGPT', hosts: ['chatgpt.com', 'chat.openai.com'], selectors: ['#prompt-textarea', 'textarea[data-id="root"]'] },
     { id: 'claude', name: 'Claude', hosts: ['claude.ai'], selectors: ['.ProseMirror[contenteditable="true"]', '[contenteditable="true"][role="textbox"]'] },
     { id: 'gemini', name: 'Gemini', hosts: ['gemini.google.com'], selectors: ['rich-textarea [contenteditable="true"]', '.ql-editor[contenteditable="true"][role="textbox"]'] },
-    { id: 'mistral', name: 'Le Chat', hosts: ['chat.mistral.ai'], selectors: ['.ProseMirror[contenteditable="true"]', '[contenteditable="true"][role="textbox"]', 'textarea[data-testid="chat-input"]'] },
+    { id: 'mistral', name: 'Mistral', hosts: ['chat.mistral.ai'], selectors: ['.ProseMirror[contenteditable="true"]', '[contenteditable="true"][role="textbox"]', 'textarea[data-testid="chat-input"]'] },
   ];
   for (const definition of definitions) {
     Object.freeze(definition.hosts); Object.freeze(definition.selectors); Object.freeze(definition);

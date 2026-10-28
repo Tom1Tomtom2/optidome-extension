@@ -17,7 +17,7 @@ const HABITS = ["newConversation", "dataRemoved"];
 const WEEKLY_TIPS = ["weeklyTip1", "weeklyTip2", "weeklyTip3", "weeklyTip4"];
 // Same threshold as the "long conversation" tip (background.js).
 const LONG_CONVERSATION_THRESHOLD = 30000;
-// shortcut: Gemini and Le Chat addresses inferred from their ids, never opened on a signed-in account; check before publishing.
+// shortcut: Gemini and Mistral addresses inferred from their ids, never opened on a signed-in account; check before publishing.
 const CONVERSATION_URL = {
   chatgpt: (id) => `https://chatgpt.com/c/${id}`,
   claude: (id) => `https://claude.ai/chat/${id}`,

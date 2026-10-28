@@ -1,7 +1,7 @@
 # Optidome Companion
 
 A free, open source Chrome extension (Optidome compagnon in French). It gives you tips while you use
-ChatGPT, Claude, Gemini or Le Chat, and a summary of your month.
+ChatGPT, Claude, Gemini or Mistral, and a summary of your month.
 
 **Nothing leaves your browser.** The extension talks to no server, not even
 Optidome's. The text of your conversations is read on the spot, then
@@ -37,7 +37,7 @@ Your draft is never sent or changed unless you click.
 Two of these tips depend on a setting each site stores its own way. Where
 the extension does not read it yet, the tip stays silent rather than guess:
 
-| | ChatGPT | Claude | Gemini | Le Chat |
+| | ChatGPT | Claude | Gemini | Mistral |
 |---|---|---|---|---|
 | deep reasoning on | read | not yet | not yet | read, to confirm |
 | answer redone | read | not yet | not yet | not yet |
@@ -71,7 +71,7 @@ The extension is not on the Chrome Web Store yet. To try it:
 2. Open `chrome://extensions` in Chrome.
 3. Turn on "Developer mode", top right.
 4. Click "Load unpacked" and choose the repository folder.
-5. Open ChatGPT, Claude, Gemini or Le Chat, or reload the tab if it was
+5. Open ChatGPT, Claude, Gemini or Mistral, or reload the tab if it was
    already open.
 
 The Optidome icon shows up in Chrome's toolbar (if needed, pin it from the
@@ -191,7 +191,7 @@ and how to read the answer. The four sites do it four different ways:
 | ChatGPT | JSON | server-sent events, a log of changes |
 | Claude | protocol buffers (Connect RPC), in a call of its own | a stream kept open, also in protocol buffers |
 | Gemini | a form holding JSON in a string | blocks of JSON, each repeating the whole answer |
-| Le Chat | JSON | lines of JSON patches |
+| Mistral | JSON | lines of JSON patches |
 
 To add a site, add an object to `ADAPTERS` modeled on the closest one, the
 site's domain to the `matches` blocks of `manifest.json`, its name to `SITE`
