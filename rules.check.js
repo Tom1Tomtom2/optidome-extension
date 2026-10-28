@@ -86,6 +86,9 @@ const used = [
   "weeklyTip2",
   "weeklyTip3",
   "weeklyTip4",
+  // The test panel's steps, built from STEPS in tips.js.
+  ...["testStep_read", "testStep_follow", "testStep_deep", "testStep_redo", "testStep_thanks", "testStep_fix"],
+  ...["testStep_key", "testStep_iban", "testStep_pasted", "testStep_long"],
 ];
 check([], used.filter((key) => !en[key]), "every key used exists");
 // A "$" not followed by a digit or another "$" would be eaten by chrome.i18n.

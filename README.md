@@ -1,10 +1,10 @@
-# optidome: use your AI better
+# Optidome Companion
 
-A free, open source Chrome extension. It gives you tips while you use
+A free, open source Chrome extension (Optidome compagnon in French). It gives you tips while you use
 ChatGPT, Claude, Gemini or Le Chat, and a summary of your month.
 
 **Nothing leaves your browser.** The extension talks to no server, not even
-optidome's. The text of your conversations is read on the spot, then
+Optidome's. The text of your conversations is read on the spot, then
 forgotten. It only keeps numbers, in Chrome's storage.
 
 It works on chatgpt.com, claude.ai, gemini.google.com and chat.mistral.ai.
@@ -27,12 +27,22 @@ When it can, a button does the work for you.
 | paste a long text already present earlier in the conversation | referring to it, instead of having it reread twice |
 | keep going in a conversation that has become very long | preparing a summary to start over in a new conversation |
 | send "thank you" on its own | nothing serious, but the AI reread the whole conversation to answer you |
-| send a one-line question with deep reasoning on (ChatGPT, Le Chat) | the quick mode, which answers as well and faster |
-| redo the same answer three times (ChatGPT) | saying what is wrong with it instead |
+| send a one-line question with deep reasoning on | the quick mode, which answers as well and faster |
+| redo the same answer three times | saying what is wrong with it instead |
 | answer "no", "shorter" or "try again" | saying the format you want from the first request |
 | just installed the extension | checking whether your conversations are used to train the AI |
 
 Your draft is never sent or changed unless you click.
+
+Two of these tips depend on a setting each site stores its own way. Where
+the extension does not read it yet, the tip stays silent rather than guess:
+
+| | ChatGPT | Claude | Gemini | Le Chat |
+|---|---|---|---|---|
+| deep reasoning on | read | not yet | not yet | read, to confirm |
+| answer redone | read | not yet | not yet | not yet |
+
+The test mode below is how the missing ones get filled in.
 
 ### The popup
 
@@ -49,7 +59,7 @@ One screen, in three parts:
   model (gpt-6.1-sol, Claude Sonnet 5.5, Gemini 3.8 Flash, Mistral Medium 3.5).
 
 The settings turn the sensitive data alerts and the other tips on or off,
-export your figures and erase them.
+export your figures and erase them, and turn on the test mode.
 
 ---
 
@@ -64,7 +74,7 @@ The extension is not on the Chrome Web Store yet. To try it:
 5. Open ChatGPT, Claude, Gemini or Le Chat, or reload the tab if it was
    already open.
 
-The optidome icon shows up in Chrome's toolbar (if needed, pin it from the
+The Optidome icon shows up in Chrome's toolbar (if needed, pin it from the
 puzzle piece icon).
 
 ---
@@ -138,6 +148,25 @@ The adapters, run unchanged on exchanges captured on the real sites
 node intercept.check.js
 ```
 
+### Test mode
+
+To check the extension on a site, open the popup, then Settings, then turn
+on "Test mode". A panel shows up at the bottom left of each assistant's page:
+
+- one step per tip, ticked as soon as the extension sees it happen (send a
+  message, redo an answer, type the example IBAN...);
+- the last exchange read: model, reasoning, answer redone, size;
+- "Preview" shows every card in turn, to check how it looks on the site;
+- "Copy the report" puts what the extension read on this site in the
+  clipboard, as JSON.
+
+In test mode, the tips come back at every occasion, and a conversation counts
+as long after a page of text. Each send also records the shape of its
+request: the field names and short settings ("high", "variant"), with the
+message replaced by `<message>` and any other text by its length. That is
+what shows where a site keeps a setting the extension does not read yet.
+Turning the test mode off erases its log.
+
 ### When a site changes
 
 Sites change the shape of their exchanges without notice. To see what the
@@ -170,14 +199,19 @@ in `tips.js`, and its default model to `prices` in `usage.js`, its domain to `pr
 one real exchange into `fixtures/` (keep only the fields the adapter reads)
 so `intercept.check.js` covers it.
 
-Everything at once, including the service worker tests: `npm test`.
+Everything at once, including the service worker tests: `npm test`. The
+same command runs on every push (`.github/workflows/ci.yml`), which also
+builds the package for the Chrome Web Store: the zip is attached to the run,
+without the tests, the captured exchanges and the check scripts.
 
 ---
 
 ## License
 
 The code is under the Apache 2.0 license (see [LICENSE](LICENSE)). The
-optidome name and logo are not covered by this license.
+Optidome name and logo are not covered by this license.
+
+To report a security issue, see [SECURITY.md](SECURITY.md).
 
 The Onest font is under the SIL Open Font License 1.1
 ([fonts/OFL-onest.txt](fonts/OFL-onest.txt)).

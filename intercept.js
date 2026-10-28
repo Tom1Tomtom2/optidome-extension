@@ -47,6 +47,49 @@
     }
   };
 
+  // Test mode, turned on from the popup's settings (bridge.js copies the
+  // setting here). Each send then also carries the shape of its request, so
+  // a tester can show where a site puts a setting the extension does not
+  // read yet (reasoning mode, "try again").
+  const testMode = () => {
+    try {
+      return localStorage.getItem("optidome-test") === "1";
+    } catch (error) {
+      return false;
+    }
+  };
+
+  // The shape of a request, without what the person wrote: short single-word
+  // strings are kept (settings, model names, actions), any other text becomes
+  // its length. The message itself is always replaced, even when it is a
+  // single word.
+  const TOKEN = /^[\w.:\-]{1,40}$/;
+  function shape(value, message, depth = 0) {
+    if (typeof value === "string") {
+      if (value === message.trim()) return "<message>";
+      return TOKEN.test(value) ? value : `<${value.length} chars>`;
+    }
+    if (value === null || typeof value !== "object") return value;
+    if (depth > 7) return "<deeper>";
+    if (Array.isArray(value)) {
+      // Gemini puts settings past the hundredth place of its array.
+      const kept = value.slice(0, 200).map((item) => shape(item, message, depth + 1));
+      return value.length > 200 ? [...kept, `<${value.length - 200} more>`] : kept;
+    }
+    const out = {};
+    for (const [key, item] of Object.entries(value).slice(0, 60)) out[key] = shape(item, message, depth + 1);
+    return out;
+  }
+
+  // Test mode only: what the tester's assistant sent, as numbers and shapes.
+  function reportTest(event) {
+    try {
+      window.postMessage({ source: "optidome-test", ...event }, window.location.origin);
+    } catch (error) {
+      // Same rule as the measures: never disturb the page.
+    }
+  }
+
   // --- Adapters --------------------------------------------------------------
   //
   // One adapter per provider. This is the only part that ages: sites rename
@@ -192,6 +235,24 @@
     return value instanceof Uint8Array ? utf8.decode(value) : undefined;
   };
 
+  // Test mode: the field tree of a message, as [number, value] pairs. Bytes
+  // that read as text go through shape(); the others are read as a nested
+  // message when they parse as one.
+  function protoShape(bytes, message, depth = 0) {
+    let list;
+    try {
+      list = fields(bytes);
+    } catch (error) {
+      return `<${bytes.length} bytes>`;
+    }
+    return list.slice(0, 40).map(([number, value]) => {
+      if (!(value instanceof Uint8Array)) return [number, value];
+      const text = utf8.decode(value);
+      if (value.length > 0 && !/[\u0000-\u0008\u000e-\u001f�]/.test(text)) return [number, shape(text, message)];
+      return [number, depth < 6 ? protoShape(value, message, depth + 1) : `<${value.length} bytes>`];
+    });
+  }
+
   // Format seen on 2026-10-27 (Connect RPC, protocol buffers). Two calls:
   // - PerformAction sends the message: [2][3] is its text, [2][7][2] the
   //   model, [1][2] the conversation, and [1][1][2] counts the turns (1 on
@@ -224,6 +285,10 @@
       tokensReceived: estimateTokens(waiting.answer),
       justThanks: isJustThanks(sent.text),
       followUpFix: isFollowUpFix(sent.text),
+      // Not found yet in Claude's requests: null says "not read", not "no".
+      deep: null,
+      regenerated: null,
+      shape: sent.shape,
     });
   }
 
@@ -237,11 +302,17 @@
       const body = new Uint8Array(await requestCopy.arrayBuffer());
       const text = pickText(body, 2, 3);
       const conversation = pickText(body, 1, 2);
-      if (text === undefined || !conversation) return; // another action than a send
+      if (text === undefined || !conversation) {
+        // Another action than a send ("try again" may be one of them): in
+        // test mode, its shape goes in the report.
+        if (testMode()) reportTest({ provider: "claude", kind: "action", shape: protoShape(body, "") });
+        return;
+      }
       claudeSends.set(conversation, {
         text,
         model: pickText(body, 2, 7, 2) ?? "unknown",
         firstTurn: pick(body, 1, 1, 2) === 1,
+        shape: testMode() ? protoShape(body, text) : undefined,
       });
       if (diagnostic()) console.log("[optidome] sent", conversation, claudeSends.get(conversation));
       pairClaude(conversation);
@@ -374,6 +445,14 @@
         return JSON.parse(headers.get("x-goog-ext-525001261-jspb"))[4] ?? "unknown";
       } catch (error) {
         return "unknown";
+      }
+    },
+    // Test mode: the header that carries the mode, signed in it may say more.
+    headerShape: (headers, message) => {
+      try {
+        return shape(JSON.parse(headers.get("x-goog-ext-525001261-jspb")), message);
+      } catch (error) {
+        return undefined;
       }
     },
     conversation: (sent) => sent?.[2]?.[0] ?? null,
@@ -511,6 +590,11 @@
       if (diagnostic() && method === "POST") {
         console.log("[optidome] POST", url, adapter ? `matched as ${adapter.name}` : "not matched");
       }
+      // In test mode, the other sends of the page are listed by their route
+      // only: "try again" may go through one of them.
+      if (!adapter && method === "POST" && testMode()) {
+        reportTest({ kind: "route", route: new URL(url, location.href).pathname });
+      }
     } catch (error) {
       adapter = null;
     }
@@ -554,9 +638,11 @@
         tokensReceived: estimateTokens(text),
         justThanks: isJustThanks(message),
         followUpFix: isFollowUpFix(message),
-        // Claude and Gemini: where the reasoning setting sits was never captured, so they stay silent.
-        deep: adapter.deep?.(sent) === true,
-        regenerated: adapter.regenerated?.(sent) === true,
+        // null when the adapter cannot read the setting on this site: "not
+        // read" is not "no". The test mode shows the difference.
+        deep: adapter.deep ? adapter.deep(sent) === true : null,
+        regenerated: adapter.regenerated ? adapter.regenerated(sent) === true : null,
+        shape: testMode() ? { request: shape(sent, message), headers: adapter.headerShape?.(headers, message) } : undefined,
       });
     } catch (error) {
       if (diagnostic()) console.warn("[optidome] measure failed", error);

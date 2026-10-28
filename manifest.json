@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "short_name": "optidome",
+  "short_name": "Optidome",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -51,6 +51,7 @@
         "https://chat.mistral.ai/*"
       ],
       "js": [
+        "providers.js",
         "rules.js",
         "dome.js",
         "tips.js"
@@ -62,7 +63,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "optidome",
+    "default_title": "__MSG_extName__",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",

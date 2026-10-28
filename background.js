@@ -19,11 +19,22 @@ const MODE_GAP_MS = 7 * 86400000; // the "quick mode" tip, once a week at most
 const FIX_GAP_MS = 30 * 86400000; // the "say the format" tip, once a month at most
 const REGENERATIONS = 3; // answers redone in one conversation before the tip
 
+// Test mode: the tips come back at every occasion, and the long conversation
+// starts at a pasted page of text, so each tip can be checked in minutes.
+const TEST_LONG_THRESHOLD = 3000;
+const TEST_LOG_SIZE = 40;
+
 // Messages arrive in bursts. We handle them one at a time so no write is lost:
 // chrome.storage is not read and written atomically.
 let queue = Promise.resolve();
 
 chrome.runtime.onMessage.addListener((measure, sender) => {
+  if (measure?.source === "optidome-test") {
+    const site = OptidomeProviders.forUrl(sender.url);
+    if (sender.id !== chrome.runtime.id || !site) return;
+    queue = queue.then(() => logTest({ ...measure, provider: site.id })).catch(() => {});
+    return;
+  }
   if (measure?.source !== "optidome-measure") return;
   if (sender.id !== chrome.runtime.id || !OptidomeProviders.forUrl(sender.url)) return;
   if (!OptidomeProviders.definitions.some(p => p.id === measure.provider) ||
@@ -44,13 +55,16 @@ chrome.runtime.onMessage.addListener((measure, sender) => {
 
 // Returns the tip to show after this send, or null.
 async function record(measure) {
-  const { registry = {}, journal = {}, activity = {}, lastThanks = 0, lastTips = {} } = await chrome.storage.local.get([
+  const { registry = {}, journal = {}, activity = {}, lastThanks = 0, lastTips = {}, testMode = false } = await chrome.storage.local.get([
     "registry",
     "activity",
     "journal",
     "lastThanks",
     "lastTips",
+    "testMode",
   ]);
+  const testing = testMode === true;
+  if (testing) await logTest({ kind: "measure", ...measure, source: undefined });
 
   const key = `${measure.provider}:${measure.conversation ?? "unknown"}`;
   const tracked = registry[key] ?? {
@@ -83,19 +97,22 @@ async function record(measure) {
   // Thanks goes first: it is the most telling, and it is rare.
   let tip = null;
   let thanksShown = lastThanks;
-  if (measure.justThanks === true && alreadyReread >= THANKS_THRESHOLD && now - lastThanks > THANKS_GAP_MS) {
+  const due = (last, gap) => testing || now - last > gap;
+  if (measure.justThanks === true && (testing || alreadyReread >= THANKS_THRESHOLD) && due(lastThanks, THANKS_GAP_MS)) {
     tip = { id: "thanks", values: { tokens: billedInput } };
     thanksShown = now;
-  } else if (billedInput > LONG_CONVERSATION_THRESHOLD && !tracked.longTipShown) {
+  } else if (billedInput > (testing ? TEST_LONG_THRESHOLD : LONG_CONVERSATION_THRESHOLD) && (testing || !tracked.longTipShown)) {
     tip = { id: "long", values: { turns: tracked.turns + 1 } };
     tracked.longTipShown = true;
-  } else if (shortDeep && now - (lastTips.mode ?? 0) > MODE_GAP_MS) {
+  } else if (shortDeep && due(lastTips.mode ?? 0, MODE_GAP_MS)) {
     tip = { id: "mode" };
     lastTips.mode = now;
+  } else if (measure.regenerated === true && testing) {
+    tip = { id: "regenerate" };
   } else if ((tracked.regenerations ?? 0) >= REGENERATIONS && !tracked.regenerateTipShown) {
     tip = { id: "regenerate" };
     tracked.regenerateTipShown = true;
-  } else if (measure.followUpFix === true && now - (lastTips.fix ?? 0) > FIX_GAP_MS) {
+  } else if (measure.followUpFix === true && due(lastTips.fix ?? 0, FIX_GAP_MS)) {
     tip = { id: "fix" };
     lastTips.fix = now;
   }
@@ -138,6 +155,19 @@ async function record(measure) {
     lastTips,
   });
   return tip;
+}
+
+// Test mode: the last sends, kept for the page's test panel and its report.
+// Numbers and shapes only, like everything else here.
+async function logTest(event) {
+  const { testMode = false, testLog = [] } = await chrome.storage.local.get(["testMode", "testLog"]);
+  if (testMode !== true) return;
+  const entry = { at: Date.now(), ...event };
+  delete entry.source;
+  const size = JSON.stringify(entry.shape ?? null).length;
+  if (size > 12000) entry.shape = `<${size} chars, too big to keep>`;
+  testLog.push(entry);
+  await chrome.storage.local.set({ testLog: testLog.slice(-TEST_LOG_SIZE) });
 }
 
 function today() {

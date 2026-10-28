@@ -20,7 +20,7 @@ const calls = (fixture) =>
     response: call.responseBase64 !== undefined ? Buffer.from(call.responseBase64, "base64") : call.response,
   }));
 
-async function run(fixture) {
+async function run(fixture, testMode = false) {
   const measures = [];
   let allSent;
   const sent = new Promise((resolve) => (allSent = resolve));
@@ -38,12 +38,15 @@ async function run(fixture) {
       });
       return new Response(stream, { status: 200 });
     },
-    postMessage: (message) => measures.push(message),
-    location: { origin: "https://example.test" },
+    postMessage: (message) => {
+      if (message.source === "optidome-measure") measures.push(message);
+    },
+    location: { origin: "https://example.test", href: "https://example.test/" },
   };
   vm.runInNewContext(fs.readFileSync(`${__dirname}/intercept.js`, "utf8"), {
     window,
-    localStorage: { getItem: () => null },
+    localStorage: { getItem: (key) => (testMode && key === "optidome-test" ? "1" : null) },
+    location: { href: "https://example.test/" },
     Request,
     Response,
     Headers,
@@ -87,6 +90,13 @@ async function run(fixture) {
     const got = measure && { ...actual, tokensSent: measure.tokensSent, tokensReceived: measure.tokensReceived };
     if (JSON.stringify(Object.entries(wanted).sort()) !== JSON.stringify(Object.entries(got ?? {}).sort())) {
       throw new Error(`${file}: expected ${JSON.stringify(wanted)}, got ${JSON.stringify(got)}`);
+    }
+    // Test mode: the same exchange carries the shape of its request, and the
+    // message never appears in it.
+    const tested = await run(fixture, true);
+    const shape = JSON.stringify(tested?.shape ?? null);
+    if (!tested?.shape || (sentText && shape.includes(JSON.stringify(sentText).slice(1, -1)))) {
+      throw new Error(`${file}: test mode shape missing or holding the message: ${shape.slice(0, 300)}`);
     }
     checked += 1;
   }

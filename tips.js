@@ -19,15 +19,26 @@
   const BOX = '[contenteditable="true"][role="textbox"], .ProseMirror[contenteditable="true"], textarea';
   // The two switches of the popup's settings, both on by default.
   let privacyAlerts = true, tipsOn = true;
+  // Test mode (popup's settings): a panel lists what the extension read on
+  // this site, and the tips show at every occasion.
+  let testing = false, testLog = [], testChecks = {};
   try {
-    chrome.storage.local.get(["privacyAlerts", "tips"]).then((v) => {
+    chrome.storage.local.get(["privacyAlerts", "tips", "testMode", "testLog", "testChecks"]).then((v) => {
       privacyAlerts = v.privacyAlerts !== false;
       tipsOn = v.tips !== false;
+      testing = v.testMode === true;
+      testLog = v.testLog ?? [];
+      testChecks = v.testChecks ?? {};
+      drawTestPanel();
     });
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
       if (changes.privacyAlerts) privacyAlerts = changes.privacyAlerts.newValue !== false;
       if (changes.tips) tipsOn = changes.tips.newValue !== false;
+      if (changes.testMode) testing = changes.testMode.newValue === true;
+      if (changes.testLog) testLog = changes.testLog.newValue ?? [];
+      if (changes.testChecks) testChecks = changes.testChecks.newValue ?? {};
+      if (changes.testMode || changes.testLog || changes.testChecks) drawTestPanel();
     });
   } catch (error) {
     // Extension detached.
@@ -43,6 +54,7 @@
     "gemini.google.com": "Gemini",
     "chat.mistral.ai": "Le Chat",
   }[location.hostname] ?? "ChatGPT";
+  const SITE_ID = OptidomeProviders.forUrl(location.href)?.id ?? "chatgpt";
 
   // The address of a new, still empty conversation, on each site.
   const isNewConversation = (path) => ["/", "/new", "/app", "/chat", "/work"].includes(path.replace(/\/$/, "") || "/");
@@ -307,12 +319,30 @@
     .progress { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--soft); }
     .dots { display: flex; gap: 4px; }
     .dots span { width: 18px; height: 6px; border-radius: 3px; background: var(--bar); }
-    .dots span.full { background: #FF6D00; }`;
+    .dots span.full { background: #FF6D00; }
+    .panel { right: auto; left: 16px; bottom: 16px; width: 300px; max-height: calc(100vh - 32px); overflow-y: auto; gap: 8px; padding: 12px 14px; font-size: 12.5px; }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .panel-header strong { font-size: 13px; }
+    .panel-toggle { width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--soft); font: inherit; cursor: pointer; padding: 0; }
+    .steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+    .steps li { display: grid; grid-template-columns: 18px 1fr; column-gap: 6px; color: var(--soft); }
+    .steps li.done { color: var(--ink); }
+    .steps small { grid-column: 2; font-size: 11px; color: var(--icon); }
+    .mark { width: 16px; height: 16px; margin-top: 1px; border-radius: 999px; border: 1px solid var(--line); font-size: 10px; line-height: 14px; text-align: center; box-sizing: border-box; }
+    .done .mark { background: #FF6D00; border-color: #FF6D00; color: #131312; }
+    .unread .mark { border-color: var(--icon); color: var(--icon); }
+    .last { color: var(--ink); font-variant-numeric: tabular-nums; }
+    .panel .note { margin: 0; }
+    .panel .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .panel .primary, .panel .secondary { font-size: 12px; padding: 6px 10px; }
+    .panel .primary { grid-column: span 2; }`;
   const card = el("div", "card");
   card.setAttribute("role", "status");
   card.setAttribute("aria-live", "polite");
   card.hidden = true;
-  shadow.append(style, card);
+  const panel = el("div", "card panel");
+  panel.hidden = true;
+  shadow.append(style, card, panel);
   let displayed = null; // { id, origin, values }
 
   // Each site marks its theme its own way: read the page's background colour;
@@ -390,7 +420,8 @@
     if (!CARDS[id]) return;
     if (["key", "data"].includes(id) ? !privacyAlerts : !tipsOn && id !== "habit") return;
     const content = CARDS[id](values);
-    if (!content.free) {
+    if (testing) markTest(`shown:${id}`);
+    if (!content.free && !testing) {
       if (shown.size > 0) return; // one tip per conversation
       const snoozed = (await load("snoozes", {}))[id];
       if (snoozed && (snoozed.times >= 3 || snoozed.until > Date.now())) return;
@@ -418,6 +449,7 @@
       await save("snoozes", snoozes);
     } else if (action === "replace") {
       if (!replaceInBox(values.excerpt, values.example)) return;
+      if (testing) markTest(id === "key" ? "keyRemoved" : "replaced");
       const count = await countHabit("dataRemoved");
       show("habit", {
         title: t("wellDone"),
@@ -425,7 +457,7 @@
         count,
       }, "habit");
     } else if (action === "summarize") {
-      writeInBox(t("summaryPrompt"));
+      if (writeInBox(t("summaryPrompt")) && testing) markTest("summarized");
     }
   }
 
@@ -462,12 +494,11 @@
 
   function writeInBox(text) {
     const box = currentBox();
-    if (!box) return;
+    if (!box) return false;
     box.focus();
     if (box.tagName === "TEXTAREA") {
       box.setSelectionRange(box.value.length, box.value.length);
-      document.execCommand("insertText", false, text);
-      return;
+      return document.execCommand("insertText", false, text);
     }
     const range = document.createRange();
     range.selectNodeContents(box);
@@ -475,7 +506,7 @@
     const selection = getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
-    document.execCommand("insertText", false, text);
+    return document.execCommand("insertText", false, text);
   }
 
   // --- Draft -----------------------------------------------------------------
@@ -549,6 +580,162 @@
     });
   } catch (error) {
     // Extension detached.
+  }
+
+  // --- Test mode -------------------------------------------------------------
+  //
+  // A panel at the bottom left, for whoever checks the extension on a site:
+  // one step per tip, ticked as soon as the extension sees it happen, the
+  // last exchange read, and a report to copy. The report holds numbers and
+  // the shape of the requests (intercept.js), never a message.
+
+  // Each step: its text key, and how to know it happened. A step tied to a
+  // setting the site's adapter cannot read says so instead of staying empty.
+  const STEPS = [
+    ["read", (m) => m.tokensReceived > 0],
+    ["follow", (m) => m.firstTurn === false && Boolean(m.conversation)],
+    ["deep", (m) => m.deep === true, "deep"],
+    ["redo", (m) => m.regenerated === true, "regenerated"],
+    ["thanks", (m) => m.justThanks === true],
+    ["fix", (m) => m.followUpFix === true],
+    ["key", null, "keyRemoved"],
+    ["iban", null, "replaced"],
+    ["pasted", null, "shown:alreadyPasted"],
+    ["long", null, "summarized"],
+  ];
+  // Every card in turn, with sample values, to check how each one looks here.
+  const SHOWCASE = [
+    ["training", {}],
+    ["key", {}],
+    ["data", { kind: "iban" }],
+    ["references", {}],
+    ["alreadyPasted", {}],
+    ["long", { turns: 12 }],
+    ["thanks", {}],
+    ["mode", {}],
+    ["regenerate", {}],
+    ["fix", {}],
+    ["habit", { title: t("wellDone"), text: t("dataRemovedText"), count: 2 }],
+  ];
+  let showcaseAt = 0;
+  let panelOpen = true;
+
+  async function markTest(check) {
+    const checks = await load("testChecks", {});
+    (checks[SITE_ID] ??= {})[check] = true;
+    await save("testChecks", checks);
+  }
+
+  const siteLog = () => testLog.filter((entry) => entry.provider === SITE_ID);
+  const yesNo = (value) => t(value === true ? "testYes" : value === false ? "testNo" : "testUnknown");
+
+  function drawTestPanel() {
+    if (!testing) {
+      panel.hidden = true;
+      return;
+    }
+    const measures = siteLog().filter((entry) => entry.kind === "measure");
+    const checks = testChecks[SITE_ID] ?? {};
+    const toggle = el("button", "panel-toggle", panelOpen ? "–" : "+");
+    toggle.type = "button";
+    toggle.setAttribute("aria-label", t(panelOpen ? "testHide" : "testOpen"));
+    toggle.addEventListener("click", () => {
+      panelOpen = !panelOpen;
+      drawTestPanel();
+    });
+    const header = el("div", "panel-header", el("strong", null, t("testTitle", SITE)), toggle);
+    if (!panelOpen) {
+      panel.replaceChildren(header);
+      panel.hidden = false;
+      return;
+    }
+
+    const list = el("ol", "steps");
+    for (const [key, happened, check] of STEPS) {
+      const done = happened ? measures.some(happened) : Boolean(checks[check]);
+      // The site's adapter cannot read this setting: every measure says null.
+      const unread = !done && happened && check && measures.length > 0 && measures.every((m) => m[check] === null);
+      const item = el("li", done ? "done" : unread ? "unread" : "", el("span", "mark", done ? "✓" : unread ? "?" : ""), el("span", null, t(`testStep_${key}`)));
+      if (unread) item.append(el("small", null, t("testNotRead")));
+      list.append(item);
+    }
+
+    const last = measures.at(-1);
+    const lastLine = last
+      ? t("testLast", last.model ?? "?", yesNo(last.deep), yesNo(last.regenerated), last.tokensSent, last.tokensReceived)
+      : t("testNothingYet");
+    const box = currentBox();
+
+    const next = el("button", "secondary", t("testShowcase", showcaseAt + 1, SHOWCASE.length));
+    next.type = "button";
+    next.addEventListener("click", () => {
+      const [id, values] = SHOWCASE[showcaseAt];
+      showcaseAt = (showcaseAt + 1) % SHOWCASE.length;
+      show(id, values, "test");
+      drawTestPanel();
+    });
+    const copy = el("button", "primary", t("testCopy"));
+    copy.type = "button";
+    copy.addEventListener("click", async () => {
+      copy.textContent = (await copyReport()) ? t("testCopied") : t("testCopyFailed");
+    });
+    const reset = el("button", "secondary", t("testReset"));
+    reset.type = "button";
+    reset.addEventListener("click", async () => {
+      const checks = await load("testChecks", {});
+      delete checks[SITE_ID];
+      await save("testChecks", checks);
+      await save("testLog", (await load("testLog", [])).filter((entry) => entry.provider !== SITE_ID));
+    });
+
+    panel.replaceChildren(
+      header,
+      el("p", null, t(box ? "testBoxFound" : "testBoxMissing")),
+      list,
+      el("p", "last", lastLine),
+      el("p", "note", t("testNote")),
+      // The buttons keep their place: "show the next tip" is clicked many times.
+      el("div", "actions", next, reset, copy)
+    );
+    panel.dataset.theme = isDark() ? "dark" : "light";
+    if (!host.isConnected) document.documentElement.append(host);
+    panel.hidden = false;
+  }
+
+  async function copyReport() {
+    const report = JSON.stringify(
+      {
+        extension: chrome.runtime.getManifest().version,
+        site: SITE_ID,
+        address: location.hostname + location.pathname.replace(/[0-9a-f-]{16,}/gi, "<id>"),
+        language: navigator.language,
+        at: new Date().toISOString(),
+        messageBox: currentBox()?.tagName.toLowerCase() ?? null,
+        checks: testChecks[SITE_ID] ?? {},
+        log: siteLog(),
+      },
+      null,
+      1
+    );
+    try {
+      // Some pages leave the clipboard waiting for a permission that never
+      // comes: after two seconds, the old way below.
+      await Promise.race([
+        navigator.clipboard.writeText(report),
+        new Promise((resolve, reject) => setTimeout(() => reject(new Error("clipboard timeout")), 2000)),
+      ]);
+      return true;
+    } catch (error) {
+      // The site refuses the clipboard: the old way, through a hidden field.
+      const field = document.createElement("textarea");
+      field.value = report;
+      field.style.cssText = "position:fixed;opacity:0";
+      document.body.append(field);
+      field.select();
+      const copied = document.execCommand("copy");
+      field.remove();
+      return copied;
+    }
   }
 
   // --- Only once, on the first visit -----------------------------------------

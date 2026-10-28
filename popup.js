@@ -216,6 +216,7 @@ function render() {
   $("weekly-tip").textContent = weeklyTip();
   $("privacy-alerts").checked = data.privacyAlerts !== false;
   $("tips").checked = data.tips !== false;
+  $("test-mode").checked = data.testMode === true;
 }
 
 $("month").addEventListener("change", (event) => {
@@ -238,6 +239,12 @@ $("close-settings").addEventListener("click", () => showSettings(false));
 
 $("privacy-alerts").addEventListener("change", (event) => chrome.storage.local.set({ privacyAlerts: event.target.checked }));
 $("tips").addEventListener("change", (event) => chrome.storage.local.set({ tips: event.target.checked }));
+// Turned off, the test mode leaves nothing behind: its log and checklist go too.
+$("test-mode").addEventListener("change", (event) =>
+  event.target.checked
+    ? chrome.storage.local.set({ testMode: true })
+    : chrome.storage.local.set({ testMode: false }).then(() => chrome.storage.local.remove(["testLog", "testChecks"]))
+);
 
 $("export").addEventListener("click", () => {
   const { journal = {}, activity = {}, registry = {}, habits = {} } = data;

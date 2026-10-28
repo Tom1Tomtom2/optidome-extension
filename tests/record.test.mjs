@@ -36,3 +36,20 @@ test('tips after sending: quick mode once a week, redone answers, missing format
  assert.equal((await send({followUpFix:true}))?.id,'fix');
  assert.equal(await send({followUpFix:true}),null,'once a month');
 });
+
+test('test mode: tips at every occasion, a log of numbers and shapes',async()=>{
+ let store={testMode:true};
+ const context=vm.createContext({console,Date,Number,Object,Promise,JSON,importScripts:()=>{},Usage,chrome:{runtime:{id:'test',getURL:p=>'chrome-extension://test/'+p,onMessage:{addListener:()=>{}}},storage:{local:{get:async()=>structuredClone(store),set:async v=>Object.assign(store,structuredClone(v)),clear:async()=>{store={};}}}}});
+ vm.runInContext(readFileSync(new URL('../background.js',import.meta.url),'utf8'),context);
+ const send=async extra=>{context.measure={provider:'claude',conversation:'c',model:'m',firstTurn:false,tokensSent:8,tokensReceived:20,deep:null,regenerated:null,...extra};return vm.runInContext('record(measure)',context);};
+ assert.equal((await send({followUpFix:true}))?.id,'fix');
+ assert.equal((await send({followUpFix:true}))?.id,'fix','again, no monthly limit in test mode');
+ assert.equal((await send({regenerated:true}))?.id,'regenerate','from the first redone answer');
+ assert.equal((await send({tokensSent:3500}))?.id,'long','long after a page of text');
+ assert.equal(store.testLog.length,4);
+ assert.equal(store.testLog[0].deep,null,'not read stays null');
+ assert.equal(store.testLog[0].source,undefined);
+ store.testMode=false;
+ await send({followUpFix:true});
+ assert.equal(store.testLog.length,4,'nothing logged once the test mode is off');
+});
