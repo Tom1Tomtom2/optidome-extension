@@ -483,6 +483,9 @@
     // and Pro modes, 0 in Fast. [79] numbers the mode (1 Fast, 5 Thinking,
     // 3 Pro) and the header carries a code per model, both likely to change.
     deep: (sent) => sent?.[96] === 1,
+    // Same day: "try again" sends [1001, null, 0] at [65], empty otherwise, and
+    // moves the ids back to [2] with the answer to redo ("rc_...").
+    regenerated: (sent) => sent?.[65]?.[0] === 1001,
     // Test mode: the header that carries the mode, signed in it may say more.
     headerShape: (headers, message) => {
       try {
