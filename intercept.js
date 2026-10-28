@@ -580,6 +580,33 @@
     return accumulator.result();
   }
 
+  // Bytes as text, unzipped first when they start like gzip (1f 8b): a
+  // binary JSON body that did not parse is the likely sign of compression.
+  async function readBinary(raw) {
+    const bytes = new Uint8Array(await new Response(raw).arrayBuffer());
+    if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return new TextDecoder().decode(bytes);
+    return new Response(new Response(bytes).body.pipeThrough(new DecompressionStream("gzip"))).text();
+  }
+
+  // Test mode, for a body still unread: its kind, its first four bytes (enough
+  // to name a format, too few to hold a word) and the headers that describe it.
+  async function describeBody(options, requestCopy, headers) {
+    const raw = options?.body ?? requestCopy;
+    let start;
+    try {
+      const bytes = new Uint8Array(await new Response(raw instanceof Request ? await raw.clone().arrayBuffer() : raw).arrayBuffer());
+      start = [...bytes.slice(0, 4)].map((byte) => byte.toString(16).padStart(2, "0")).join(" ");
+    } catch (error) {
+      start = "unreadable";
+    }
+    return {
+      kind: Object.prototype.toString.call(raw),
+      start,
+      type: headers?.get("content-type"),
+      encoding: headers?.get("content-encoding"),
+    };
+  }
+
   async function readSentBody(adapter, requestCopy, options) {
     try {
       // Trap of 2026-10-28: Claude's JSON route sends its body as binary, not
@@ -587,7 +614,7 @@
       // would be used up, so it is left alone.
       const raw = options?.body;
       const binary = raw instanceof Blob || raw instanceof ArrayBuffer || ArrayBuffer.isView(raw);
-      const body = typeof raw === "string" ? raw : binary ? await new Response(raw).text() : requestCopy ? await requestCopy.text() : null;
+      const body = typeof raw === "string" ? raw : binary ? await readBinary(raw) : requestCopy ? await requestCopy.text() : null;
       if (body != null) return (adapter.parseSent ?? JSON.parse)(body);
     } catch (error) {
       // No body, or not in the expected shape.
@@ -694,7 +721,7 @@
               request: shape(sent, message),
               headers: adapter.headerShape?.(headers, message),
               // A body still unread: say what kind it was, to read it next time.
-              body: sent ? undefined : Object.prototype.toString.call(options?.body ?? requestCopy),
+              body: sent ? undefined : await describeBody(options, requestCopy, headers),
             }
           : undefined,
       });

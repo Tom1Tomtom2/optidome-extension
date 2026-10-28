@@ -548,9 +548,11 @@
 
   // After sending, the box empties: a tip about the draft no longer applies.
   // The same observer sees conversation changes go by.
+  // Not the paste card: a long paste becomes an attachment on Claude and
+  // ChatGPT, the box stays empty, and the card closed at once (2026-10-28).
   new MutationObserver(() => {
     followConversation();
-    if (displayed?.origin !== "draft" && displayed?.origin !== "paste") return;
+    if (displayed?.origin !== "draft") return;
     const box = currentBox();
     if (!box || readBox(box).trim() === "") hide();
   }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
