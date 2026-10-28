@@ -76,6 +76,19 @@ async function record(measure) {
     seenOn: null,
   };
 
+  // The end of an answer already counted (Mistral resumes a long answer on a
+  // second call): only its output is added, no new message and no tip.
+  if (measure.continued === true) {
+    tracked.total += measure.tokensReceived;
+    tracked.seenOn = today();
+    registry[key] = tracked;
+    const byProvider = ((journal[tracked.seenOn] ??= {})[measure.provider] ??= {});
+    const totals = (byProvider.unknown ??= { typed: 0, billed: 0, output: 0, turns: 0, longTurns: 0, shortDeep: 0, incompleteConversations: 0 });
+    totals.output += measure.tokensReceived;
+    await chrome.storage.local.set({ registry: prune(registry), journal });
+    return null;
+  }
+
   // Daily membership is recorded separately: last-seen dates cannot reconstruct
   // historical conversation counts. Existing journal days remain unknown.
   const dayKey = today();

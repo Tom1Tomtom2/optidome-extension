@@ -99,6 +99,7 @@ window.addEventListener("message", (event) => {
     followUpFix: measure.followUpFix === true,
     deep: flag(measure.deep),
     regenerated: flag(measure.regenerated),
+    continued: measure.continued === true,
     // The shape of the request goes on in test mode only.
     shape: testMode ? measure.shape : undefined,
   });

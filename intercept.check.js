@@ -94,8 +94,9 @@ async function run(fixture, testMode = false) {
       followUpFix: measure.followUpFix === true,
       deep: measure.deep === true,
       regenerated: measure.regenerated === true,
+      continued: measure.continued === true,
     };
-    const wanted = { ...expected, tokensSent: tokens(sentText) + attachedTokens, tokensReceived: tokens(answer) };
+    const wanted = { continued: false, ...expected, tokensSent: tokens(sentText) + attachedTokens, tokensReceived: tokens(answer) };
     const got = measure && { ...actual, tokensSent: measure.tokensSent, tokensReceived: measure.tokensReceived };
     if (JSON.stringify(Object.entries(wanted).sort()) !== JSON.stringify(Object.entries(got ?? {}).sort())) {
       throw new Error(`${file}: expected ${JSON.stringify(wanted)}, got ${JSON.stringify(got)}`);

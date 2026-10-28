@@ -435,7 +435,10 @@
 
   const MISTRAL = {
     name: "mistral",
-    matches: (url, method) => method === "POST" && /\/api\/chat(\?|$)/.test(url),
+    // A long answer may finish on a second call, /api/chat/resume (seen on
+    // 2026-10-28): read the same way, it only adds to the answer.
+    matches: (url, method) => method === "POST" && /\/api\/chat(\/resume)?(\?|$)/.test(url),
+    continued: (url) => url.includes("/api/chat/resume"),
     model: (sent) => sent?.modelConfig?.model_alias ?? "unknown",
     // Seen on 2026-10-28 (test mode): the "Think" switch sends "high" instead
     // of "low", and "try again" sends mode "rewrite", without text.
@@ -649,6 +652,26 @@
     }
   }
 
+  const routeOf = (url) => new URL(url, location.href).pathname.replace(/[0-9a-f_-]{16,}|\d{6,}/gi, "<id>");
+
+  // Test mode: an answer may also come through a WebSocket or an EventSource
+  // (ChatGPT Pro, 2026-10-28, came through none of the known calls). Their
+  // opening is listed like a route; they are otherwise left alone.
+  for (const name of ["WebSocket", "EventSource"]) {
+    const Original = window[name];
+    if (typeof Original !== "function") continue;
+    window[name] = new Proxy(Original, {
+      construct(target, args, newTarget) {
+        try {
+          if (testMode()) reportTest({ kind: "route", route: `${name} ${routeOf(String(args[0]))}` });
+        } catch (error) {
+          // Never in the way of the page.
+        }
+        return Reflect.construct(target, args, newTarget);
+      },
+    });
+  }
+
   // --- Replacing fetch -------------------------------------------------------
   //
   // Absolute rule: whatever happens here, the page must keep working. Every
@@ -683,10 +706,10 @@
       if (diagnostic() && method === "POST") {
         console.log("[optidome] POST", url, adapter ? `matched as ${adapter.name}` : "not matched");
       }
-      // In test mode, the other sends of the page are listed by their route
-      // only: "try again" may go through one of them.
-      if (!adapter && method === "POST" && testMode()) {
-        reportTest({ kind: "route", route: new URL(url, location.href).pathname });
+      // In test mode, the page's other calls are listed by their route only,
+      // ids blanked: "try again" or the end of an answer may go through one.
+      if (!adapter && testMode()) {
+        reportTest({ kind: "route", route: `${method} ${routeOf(url)}` });
       }
     } catch (error) {
       adapter = null;
@@ -735,6 +758,7 @@
         // read" is not "no". The test mode shows the difference.
         deep: adapter.deep ? adapter.deep(sent) === true : null,
         regenerated: adapter.regenerated ? adapter.regenerated(sent, url) === true : null,
+        continued: adapter.continued?.(url) === true,
         shape: testMode()
           ? {
               request: shape(sent, message),

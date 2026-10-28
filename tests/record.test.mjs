@@ -61,3 +61,16 @@ test('test mode: tips at every occasion, a log of numbers and shapes',async()=>{
  await send({followUpFix:true});
  assert.equal(store.testLog.length,5,'nothing logged once the test mode is off');
 });
+
+test('the end of an answer adds its output, not a message',async()=>{
+ let store={};
+ const context=vm.createContext({console,Date,Number,Object,Promise,JSON,importScripts:()=>{},Usage,chrome:{runtime:{id:'test',getURL:p=>'chrome-extension://test/'+p,onMessage:{addListener:()=>{}}},storage:{local:{get:async()=>structuredClone(store),set:async v=>Object.assign(store,structuredClone(v)),clear:async()=>{store={};}}}}});
+ vm.runInContext(readFileSync(new URL('../background.js',import.meta.url),'utf8'),context);
+ const send=async extra=>{context.measure={provider:'mistral',conversation:'c',model:'m',firstTurn:true,tokensSent:10,tokensReceived:0,...extra};return vm.runInContext('record(measure)',context);};
+ await send({});
+ assert.equal(await send({continued:true,firstTurn:false,tokensSent:0,tokensReceived:500,model:'unknown'}),null);
+ assert.equal(store.registry['mistral:c'].turns,1,'still one message');
+ assert.equal(store.registry['mistral:c'].total,510);
+ const day=store.journal[Usage.dateKey()].mistral;
+ assert.equal(day.m.turns+day.unknown.turns,1);assert.equal(day.unknown.output,500);
+});
