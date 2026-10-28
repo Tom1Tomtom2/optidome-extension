@@ -393,8 +393,11 @@
     model: (sent) => sent?.model ?? "unknown",
     regenerated: (sent, url) => url.includes("/retry_completion"),
     conversation: (sent, url) => /\/chat_conversations\/([^/]+)\//.exec(url)?.[1] ?? null,
-    // On the first turn, the parent is a known all-zero id.
-    firstTurn: (sent) => sent?.parent_message_uuid === "00000000-0000-4000-8000-000000000000",
+    // Seen on 2026-10-28 (test mode): the first message also creates the
+    // conversation, and reasoning is an effort level ("low" to "xhigh"),
+    // thinking_mode staying "auto". From "xhigh" up counts as deep.
+    firstTurn: (sent) => Boolean(sent?.create_conversation_params),
+    deep: (sent) => ["xhigh", "max"].includes(sent?.effort) || sent?.thinking_mode === "enabled",
     sentMessage: (sent) => sent?.prompt ?? "",
     accumulator() {
       let text = "";
