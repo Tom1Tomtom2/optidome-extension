@@ -391,8 +391,10 @@
     name: "mistral",
     matches: (url, method) => method === "POST" && /\/api\/chat(\?|$)/.test(url),
     model: (sent) => sent?.modelConfig?.model_alias ?? "unknown",
-    // shortcut: only "low" was seen (2026-10-27), "high" is assumed to be the deep setting; capture it before publishing.
+    // Seen on 2026-10-28 (test mode): the "Think" switch sends "high" instead
+    // of "low", and "try again" sends mode "rewrite", without text.
     deep: (sent) => sent?.modelConfig?.reasoning_effort === "high",
+    regenerated: (sent) => sent?.mode === "rewrite",
     conversation: (sent) => sent?.chatId ?? null,
     firstTurn: (sent) => sent?.mode === "create",
     sentMessage: (sent) =>
