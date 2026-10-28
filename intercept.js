@@ -369,6 +369,33 @@
     },
   };
 
+  // Claude's older route, still served to some accounts (seen on 2026-10-28
+  // in a test mode report, while another account got the Connect RPC above).
+  // The request is JSON with the text in "prompt"; the answer is server-sent
+  // events in the shape of Anthropic's API (content_block_delta, text_delta).
+  // "Try again" is assumed to post to retry_completion: to confirm.
+  const CLAUDE_REST = {
+    name: "claude",
+    matches: (url, method) =>
+      method === "POST" && /\/chat_conversations\/[^/]+\/(retry_)?completion(\?|$)/.test(url),
+    model: (sent) => sent?.model ?? "unknown",
+    regenerated: (sent, url) => url.includes("/retry_completion"),
+    conversation: (sent, url) => /\/chat_conversations\/([^/]+)\//.exec(url)?.[1] ?? null,
+    // On the first turn, the parent is a known all-zero id.
+    firstTurn: (sent) => sent?.parent_message_uuid === "00000000-0000-4000-8000-000000000000",
+    sentMessage: (sent) => sent?.prompt ?? "",
+    accumulator() {
+      let text = "";
+      return {
+        // Only text deltas: the reasoning comes as thinking_delta, not counted.
+        line(object) {
+          if (object?.delta?.type === "text_delta" && typeof object.delta.text === "string") text += object.delta.text;
+        },
+        result: () => ({ text, conversation: null }),
+      };
+    },
+  };
+
   // Format seen on 2026-10-27. The request is JSON: the text is in
   // content[] on the first message (mode "create"), in messageInput[] with a
   // chatId afterwards (mode "append"); the model is modelConfig.model_alias.
@@ -493,7 +520,7 @@
     },
   };
 
-  const ADAPTERS = [CHATGPT, CLAUDE, GEMINI, MISTRAL];
+  const ADAPTERS = [CHATGPT, CLAUDE, CLAUDE_REST, GEMINI, MISTRAL];
 
   // --- Reading the stream ----------------------------------------------------
 
@@ -653,7 +680,7 @@
         // null when the adapter cannot read the setting on this site: "not
         // read" is not "no". The test mode shows the difference.
         deep: adapter.deep ? adapter.deep(sent) === true : null,
-        regenerated: adapter.regenerated ? adapter.regenerated(sent) === true : null,
+        regenerated: adapter.regenerated ? adapter.regenerated(sent, url) === true : null,
         shape: testMode() ? { request: shape(sent, message), headers: adapter.headerShape?.(headers, message) } : undefined,
       });
     } catch (error) {

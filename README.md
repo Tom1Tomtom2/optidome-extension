@@ -190,6 +190,7 @@ and how to read the answer. The four sites do it four different ways:
 |---|---|---|
 | ChatGPT | JSON | server-sent events, a log of changes |
 | Claude | protocol buffers (Connect RPC), in a call of its own | a stream kept open, also in protocol buffers |
+| Claude (some accounts) | JSON, on `chat_conversations/<id>/completion` | server-sent events, in the shape of Anthropic's API |
 | Gemini | a form holding JSON in a string | blocks of JSON, each repeating the whole answer |
 | Mistral | JSON | lines of JSON patches |
 
