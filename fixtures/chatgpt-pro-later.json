@@ -1,5 +1,5 @@
 {
-  "seen": "Rebuilt, not captured: a gpt-6-pro send whose stream ends without an answer (test mode reports of 2026-10-28), then the page reading the conversation. The read is assumed in ChatGPT's long-standing mapping format: replace with a capture.",
+  "seen": "Rebuilt from a test mode report of 2026-10-28: a gpt-6-pro send whose stream ends without an answer, then the page polling the conversation, a flat list of messages (system, web.run, thoughts, reasoning_recap, then the final text answer).",
   "measures": 2,
   "requests": [
     {
@@ -7,24 +7,24 @@
       "headers": {
         "content-type": "application/json"
       },
-      "body": "{\"action\": \"next\", \"messages\": [{\"id\": \"u1\", \"content\": {\"parts\": [\"Capitale du Portugal ?\"]}}], \"model\": \"gpt-6-pro\", \"conversation_id\": null, \"parent_message_id\": \"client-created-root\"}",
-      "response": "data: {\"conversation_id\": \"6ae20448-ac68-8325-b0b7-ac01d79dad2c\"}\n\ndata: [DONE]\n\n"
+      "body": "{\"action\": \"next\", \"messages\": [{\"id\": \"07720bf6-79b1-4514-bf22-093f3f37cef0\", \"content\": {\"parts\": [\"Capitale du Portugal ?\"]}}], \"model\": \"gpt-6-pro\", \"conversation_id\": null, \"parent_message_id\": \"client-created-root\"}",
+      "response": "data: {\"conversation_id\": \"6ae20ebf-4284-8328-a975-6034776ebf4d\"}\n\ndata: [DONE]\n\n"
     },
     {
       "after": true,
       "method": "GET",
-      "url": "https://chatgpt.com/backend-api/conversations/6ae20448-ac68-8325-b0b7-ac01d79dad2c",
+      "url": "https://chatgpt.com/backend-api/conversations/6ae20ebf-4284-8328-a975-6034776ebf4d",
       "headers": {},
-      "response": "{\"conversation_id\": \"6ae20448-ac68-8325-b0b7-ac01d79dad2c\", \"current_node\": \"a1\", \"mapping\": {\"client-created-root\": {\"id\": \"client-created-root\", \"message\": null, \"parent\": null, \"children\": [\"u1\"]}, \"u1\": {\"id\": \"u1\", \"message\": {\"id\": \"u1\", \"author\": {\"role\": \"user\"}, \"content\": {\"content_type\": \"text\", \"parts\": [\"Capitale du Portugal ?\"]}, \"status\": \"finished_successfully\"}, \"parent\": \"client-created-root\", \"children\": [\"t1\"]}, \"t1\": {\"id\": \"t1\", \"message\": {\"id\": \"t1\", \"author\": {\"role\": \"assistant\"}, \"content\": {\"content_type\": \"thoughts\", \"thoughts\": []}, \"status\": \"finished_successfully\", \"end_turn\": false}, \"parent\": \"u1\", \"children\": [\"a1\"]}, \"a1\": {\"id\": \"a1\", \"message\": {\"id\": \"a1\", \"author\": {\"role\": \"assistant\"}, \"content\": {\"content_type\": \"text\", \"parts\": [\"Lisbonne.\"]}, \"status\": \"finished_successfully\", \"end_turn\": true, \"metadata\": {\"model_slug\": \"gpt-6-pro\"}}, \"parent\": \"t1\", \"children\": []}}}"
+      "response": "{\"async_status\": 4, \"conversation_id\": \"6ae20ebf-4284-8328-a975-6034776ebf4d\", \"messages\": [{\"id\": \"07720bf6-79b1-4514-bf22-093f3f37cef0\", \"author\": {\"role\": \"user\"}, \"content\": {\"content_type\": \"text\", \"parts\": [\"Capitale du Portugal ?\"]}, \"end_turn\": null, \"status\": \"finished_successfully\"}, {\"id\": \"s1\", \"author\": {\"role\": \"system\"}, \"content\": {\"content_type\": \"text\", \"parts\": [\"\"]}, \"end_turn\": true, \"metadata\": {\"model_slug\": \"gpt-6-pro\"}}, {\"id\": \"w1\", \"author\": {\"role\": \"assistant\"}, \"recipient\": \"web.run\", \"content\": {\"content_type\": \"text\", \"parts\": [\"\"]}, \"end_turn\": false, \"metadata\": {\"model_slug\": \"gpt-6-pro\"}}, {\"id\": \"t1\", \"author\": {\"role\": \"assistant\"}, \"content\": {\"content_type\": \"thoughts\", \"thoughts\": [{\"summary\": \"Recherche\"}]}, \"end_turn\": false}, {\"id\": \"r1\", \"author\": {\"role\": \"assistant\"}, \"content\": {\"content_type\": \"reasoning_recap\", \"content\": \"Réfléchi 29 s\"}, \"end_turn\": true}, {\"id\": \"a1\", \"author\": {\"role\": \"assistant\"}, \"channel\": \"final\", \"content\": {\"content_type\": \"text\", \"parts\": [\"Lisbonne est la capitale du Portugal.\"]}, \"end_turn\": true, \"metadata\": {\"model_slug\": \"gpt-6-pro\", \"is_complete\": true}}]}"
     }
   ],
   "expect": {
     "provider": "chatgpt",
     "model": "gpt-6-pro",
-    "conversation": "6ae20448-ac68-8325-b0b7-ac01d79dad2c",
+    "conversation": "6ae20ebf-4284-8328-a975-6034776ebf4d",
     "firstTurn": false,
     "sentText": "",
-    "answer": "Lisbonne.",
+    "answer": "Lisbonne est la capitale du Portugal.",
     "justThanks": false,
     "followUpFix": false,
     "deep": false,

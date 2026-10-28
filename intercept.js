@@ -550,10 +550,11 @@
   // --- ChatGPT answers that come later ----------------------------------------
   //
   // Seen on 2026-10-28 with gpt-6-pro: the send's stream ends without an
-  // answer, and the page then reads the conversation again
-  // (GET /backend-api/conversations/<id>) until the answer is there. That
-  // read is where the answer is counted, once, as the end of the send.
-  // shortcut: the shape of that read was never captured; mapping, children and end_turn are ChatGPT's long-standing conversation format, check it in a test report.
+  // answer, and the page then polls the conversation
+  // (GET /backend-api/conversations/<id>, every 10 s) until the answer is
+  // there. The read is a flat list, "messages", in order: reasoning, searches
+  // and recap come first, then the answer, an assistant text message with
+  // end_turn true (channel "final"). It is counted once, as the end of the send.
   const awaitingAnswer = new Map(); // message the answer follows -> { conversation, since }
 
   const answerLaterRoute = (url, method) =>
@@ -570,30 +571,26 @@
   async function readLaterAnswer(response) {
     const read = await response.json();
     if (testMode()) reportTest({ provider: "chatgpt", kind: "answer", shape: { answer: answerShape(read) } });
-    const mapping = read?.mapping;
-    if (!mapping) return;
+    const messages = Array.isArray(read?.messages) ? read.messages : [];
     for (const [after, { conversation, since }] of awaitingAnswer) {
-      // The answer may come after reasoning or tool steps: walk down from the
-      // message it follows, keeping only what was written after the send.
-      let text = "";
-      let finished = false;
-      let model = "unknown";
-      const queue = [...(mapping[after]?.children ?? [])];
-      while (queue.length > 0) {
-        const node = mapping[queue.shift()];
-        queue.push(...(node?.children ?? []));
-        const message = node?.message;
-        if (message?.author?.role !== "assistant" || message.content?.content_type !== "text") continue;
-        if (typeof message.create_time === "number" && message.create_time < since - 5) continue;
-        text += (message.content.parts ?? []).filter((part) => typeof part === "string").join("");
-        finished ||= message.end_turn === true;
-        model = message.metadata?.model_slug ?? model;
-      }
-      if (!finished) continue;
+      const start = messages.findIndex((message) => message?.id === after);
+      if (start < 0) continue;
+      // Only what was written after the send: "try again" leaves the old
+      // answer in the list.
+      const answers = messages
+        .slice(start + 1)
+        .filter(
+          (message) =>
+            message?.author?.role === "assistant" &&
+            message.content?.content_type === "text" &&
+            !(typeof message.create_time === "number" && message.create_time < since - 5)
+        );
+      if (!answers.some((message) => message.end_turn === true)) continue;
       awaitingAnswer.delete(after);
+      const text = answers.flatMap((message) => message.content.parts ?? []).filter((part) => typeof part === "string").join("");
       report({
         provider: "chatgpt",
-        model,
+        model: answers.at(-1).metadata?.model_slug ?? "unknown",
         conversation,
         firstTurn: false,
         tokensSent: 0,
