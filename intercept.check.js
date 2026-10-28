@@ -57,15 +57,18 @@ async function run(fixture, testMode = false) {
     ArrayBuffer,
     TextDecoder,
     TextDecoderStream,
+    DecompressionStream,
     URLSearchParams,
     console,
   });
 
   const responses = [];
   for (const call of calls(fixture)) {
-    // "bodyAs": "blob" sends the body the way Claude's JSON route does.
+    // "bodyAs": "blob" or "gzip" sends the body as bytes, the way Claude's JSON route does.
     responses.push(
-      await (fixture.bodyAs === "blob"
+      await (fixture.bodyAs === "gzip"
+        ? window.fetch(call.url, { method: "POST", headers: call.headers, body: new Uint8Array(require("zlib").gzipSync(call.body)) })
+        : fixture.bodyAs === "blob"
         ? window.fetch(call.url, { method: "POST", headers: call.headers, body: new Blob([call.body]) })
         : window.fetch(new Request(call.url, { method: "POST", headers: call.headers, body: call.body })))
     );
