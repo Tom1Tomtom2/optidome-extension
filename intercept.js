@@ -398,6 +398,10 @@
     // thinking_mode staying "auto". From "xhigh" up counts as deep.
     firstTurn: (sent) => Boolean(sent?.create_conversation_params),
     deep: (sent) => ["xhigh", "max"].includes(sent?.effort) || sent?.thinking_mode === "enabled",
+    // A long paste becomes an attachment with its text in extracted_content
+    // (2026-10-28), and the prompt stays empty.
+    attachedChars: (sent) =>
+      (sent?.attachments ?? []).reduce((sum, attachment) => sum + (attachment?.extracted_content?.length ?? 0), 0),
     sentMessage: (sent) => sent?.prompt ?? "",
     accumulator() {
       let text = "";
