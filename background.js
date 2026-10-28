@@ -167,7 +167,17 @@ async function logTest(event) {
   if (event.kind === "route" && testLog.some((e) => e.kind === "route" && e.provider === event.provider && e.route === event.route)) return;
   const entry = { at: Date.now(), ...event };
   delete entry.source;
-  const size = JSON.stringify(entry.shape ?? null).length;
+  // Claude sends its whole tool list with each message (44,000 characters on
+  // 2026-10-28): keep every setting, and only the length of the bulky ones.
+  const length = (value) => JSON.stringify(value ?? null).length;
+  const request = entry.shape?.request;
+  if (length(entry.shape) > 12000 && request && typeof request === "object" && !Array.isArray(request)) {
+    entry.shape = {
+      ...entry.shape,
+      request: Object.fromEntries(Object.entries(request).map(([key, value]) => [key, length(value) > 1000 ? `<${length(value)} chars>` : value])),
+    };
+  }
+  const size = length(entry.shape);
   if (size > 12000) entry.shape = `<${size} chars, too big to keep>`;
   testLog.push(entry);
   await chrome.storage.local.set({ testLog: testLog.slice(-TEST_LOG_SIZE) });

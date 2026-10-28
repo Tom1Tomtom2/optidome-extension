@@ -52,6 +52,11 @@ test('test mode: tips at every occasion, a log of numbers and shapes',async()=>{
  context.event={kind:'route',provider:'gemini',route:'/log'};
  await vm.runInContext('logTest(event)',context);await vm.runInContext('logTest(event)',context);
  assert.equal(store.testLog.length,5,'a route is logged once');
+ context.event={kind:'measure',provider:'claude',shape:{request:{tools:Array(2000).fill('tool_name'),thinking:'enabled'}}};
+ await vm.runInContext('logTest(event)',context);
+ assert.equal(store.testLog.at(-1).shape.request.thinking,'enabled','a bulky request keeps its settings');
+ assert.match(store.testLog.at(-1).shape.request.tools,/^<\d+ chars>$/);
+ store.testLog.pop();
  store.testMode=false;
  await send({followUpFix:true});
  assert.equal(store.testLog.length,5,'nothing logged once the test mode is off');
