@@ -1,6 +1,6 @@
 {
   "extName": { "message": "Optidome compagnon" },
-  "extDescription": { "message": "Des conseils au bon moment pour protéger vos données et mieux utiliser ChatGPT, Claude, Gemini et Mistral. Rien ne quitte votre navigateur." },
+  "extDescription": { "message": "Conseils au bon moment pour protéger vos données et mieux utiliser ChatGPT, Claude, Gemini et Mistral. Rien ne quitte le navigateur." },
   "catPrivacy": { "message": "Confidentialité" },
   "catReliability": { "message": "Fiabilité" },
   "catLongConversation": { "message": "Conversation longue" },
