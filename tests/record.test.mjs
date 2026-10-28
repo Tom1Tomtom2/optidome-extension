@@ -49,7 +49,10 @@ test('test mode: tips at every occasion, a log of numbers and shapes',async()=>{
  assert.equal(store.testLog.length,4);
  assert.equal(store.testLog[0].deep,null,'not read stays null');
  assert.equal(store.testLog[0].source,undefined);
+ context.event={kind:'route',provider:'gemini',route:'/log'};
+ await vm.runInContext('logTest(event)',context);await vm.runInContext('logTest(event)',context);
+ assert.equal(store.testLog.length,5,'a route is logged once');
  store.testMode=false;
  await send({followUpFix:true});
- assert.equal(store.testLog.length,4,'nothing logged once the test mode is off');
+ assert.equal(store.testLog.length,5,'nothing logged once the test mode is off');
 });

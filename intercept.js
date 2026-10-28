@@ -435,6 +435,9 @@
   // whose inner array holds the message at [0][0], and from the second turn on
   // [conversation, answer, draft] ids at [2]. The model is a code in a header.
   // Signed out, Gemini opens a new conversation for every message.
+  const geminiIds = (sent) =>
+    Array.isArray(sent) ? sent.find((item) => Array.isArray(item) && /^c_\w+$/.test(item[0] ?? "")) : undefined;
+
   const GEMINI = {
     name: "gemini",
     matches: (url, method) =>
@@ -455,8 +458,11 @@
         return undefined;
       }
     },
-    conversation: (sent) => sent?.[2]?.[0] ?? null,
-    firstTurn: (sent) => !sent?.[2]?.[0],
+    // Signed out, the ids sit at [2]; signed in (seen on 2026-10-28), around
+    // [71], with [2] left empty. So look for the array that starts with the
+    // conversation id ("c_...") rather than trust a position.
+    conversation: (sent) => geminiIds(sent)?.[0] ?? null,
+    firstTurn: (sent) => !geminiIds(sent)?.[0],
     sentMessage: (sent) => sent?.[0]?.[0] ?? "",
     // The answer is not SSE: after ")]}'", each block is a line with its
     // length, then a line [["wrb.fr",null,"<JSON string>"]]. Each block repeats

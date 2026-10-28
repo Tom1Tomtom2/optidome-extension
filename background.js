@@ -162,6 +162,9 @@ async function record(measure) {
 async function logTest(event) {
   const { testMode = false, testLog = [] } = await chrome.storage.local.get(["testMode", "testLog"]);
   if (testMode !== true) return;
+  // A site's background calls (Gemini's /log) would push the sends out of
+  // the log: each route is kept once.
+  if (event.kind === "route" && testLog.some((e) => e.kind === "route" && e.provider === event.provider && e.route === event.route)) return;
   const entry = { at: Date.now(), ...event };
   delete entry.source;
   const size = JSON.stringify(entry.shape ?? null).length;
