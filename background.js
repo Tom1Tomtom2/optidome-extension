@@ -173,11 +173,20 @@ async function record(measure) {
 // Test mode: the last sends, kept for the page's test panel and its report.
 // Numbers and shapes only, like everything else here.
 async function logTest(event) {
-  const { testMode = false, testLog = [] } = await chrome.storage.local.get(["testMode", "testLog"]);
+  let { testMode = false, testLog = [] } = await chrome.storage.local.get(["testMode", "testLog"]);
   if (testMode !== true) return;
   // A site's background calls (Gemini's /log) would push the sends out of
   // the log: each route is kept once.
-  if (event.kind === "route" && testLog.some((e) => e.kind === "route" && e.provider === event.provider && e.route === event.route)) return;
+  // Each route is kept once, with the number of times it was called: a page
+  // that polls shows it.
+  const seen = event.kind === "route" && testLog.find((e) => e.kind === "route" && e.provider === event.provider && e.route === event.route);
+  if (seen) {
+    seen.count = (seen.count ?? 1) + 1;
+    await chrome.storage.local.set({ testLog });
+    return;
+  }
+  // A conversation read again and again: only the latest one is kept.
+  if (event.kind === "answer") testLog = testLog.filter((e) => !(e.kind === "answer" && e.provider === event.provider));
   const entry = { at: Date.now(), ...event };
   delete entry.source;
   // Claude sends its whole tool list with each message (44,000 characters on
@@ -191,7 +200,7 @@ async function logTest(event) {
     };
   }
   const size = length(entry.shape);
-  if (size > 12000) entry.shape = `<${size} chars, too big to keep>`;
+  if (size > (event.kind === "answer" ? 40000 : 12000)) entry.shape = `<${size} chars, too big to keep>`;
   testLog.push(entry);
   await chrome.storage.local.set({ testLog: testLog.slice(-TEST_LOG_SIZE) });
 }

@@ -1,0 +1,34 @@
+{
+  "seen": "Rebuilt, not captured: a gpt-6-pro send whose stream ends without an answer (test mode reports of 2026-10-28), then the page reading the conversation. The read is assumed in ChatGPT's long-standing mapping format: replace with a capture.",
+  "measures": 2,
+  "requests": [
+    {
+      "url": "https://chatgpt.com/backend-api/f/conversation",
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"action\": \"next\", \"messages\": [{\"id\": \"u1\", \"content\": {\"parts\": [\"Capitale du Portugal ?\"]}}], \"model\": \"gpt-6-pro\", \"conversation_id\": null, \"parent_message_id\": \"client-created-root\"}",
+      "response": "data: {\"conversation_id\": \"6ae20448-ac68-8325-b0b7-ac01d79dad2c\"}\n\ndata: [DONE]\n\n"
+    },
+    {
+      "after": true,
+      "method": "GET",
+      "url": "https://chatgpt.com/backend-api/conversations/6ae20448-ac68-8325-b0b7-ac01d79dad2c",
+      "headers": {},
+      "response": "{\"conversation_id\": \"6ae20448-ac68-8325-b0b7-ac01d79dad2c\", \"current_node\": \"a1\", \"mapping\": {\"client-created-root\": {\"id\": \"client-created-root\", \"message\": null, \"parent\": null, \"children\": [\"u1\"]}, \"u1\": {\"id\": \"u1\", \"message\": {\"id\": \"u1\", \"author\": {\"role\": \"user\"}, \"content\": {\"content_type\": \"text\", \"parts\": [\"Capitale du Portugal ?\"]}, \"status\": \"finished_successfully\"}, \"parent\": \"client-created-root\", \"children\": [\"t1\"]}, \"t1\": {\"id\": \"t1\", \"message\": {\"id\": \"t1\", \"author\": {\"role\": \"assistant\"}, \"content\": {\"content_type\": \"thoughts\", \"thoughts\": []}, \"status\": \"finished_successfully\", \"end_turn\": false}, \"parent\": \"u1\", \"children\": [\"a1\"]}, \"a1\": {\"id\": \"a1\", \"message\": {\"id\": \"a1\", \"author\": {\"role\": \"assistant\"}, \"content\": {\"content_type\": \"text\", \"parts\": [\"Lisbonne.\"]}, \"status\": \"finished_successfully\", \"end_turn\": true, \"metadata\": {\"model_slug\": \"gpt-6-pro\"}}, \"parent\": \"t1\", \"children\": []}}}"
+    }
+  ],
+  "expect": {
+    "provider": "chatgpt",
+    "model": "gpt-6-pro",
+    "conversation": "6ae20448-ac68-8325-b0b7-ac01d79dad2c",
+    "firstTurn": false,
+    "sentText": "",
+    "answer": "Lisbonne.",
+    "justThanks": false,
+    "followUpFix": false,
+    "deep": false,
+    "regenerated": false,
+    "continued": true
+  }
+}

@@ -11,10 +11,14 @@ const CHARS_PER_TOKEN = 3.8; // same estimate as intercept.js
 const tokens = (text) => (text ? Math.ceil(text.length / CHARS_PER_TOKEN) : 0);
 
 // A fixture holds one exchange, or several calls in the order the site made
-// them ("requests"). Bodies are text, or base64 when binary.
+// them ("requests"). Bodies are text, or base64 when binary. A call marked
+// "after" goes out once the first measure is in (a page reading the answer
+// later), and "measures" says how many the exchange gives; the last is checked.
 const calls = (fixture) =>
   (fixture.requests ?? [fixture]).map((call) => ({
     url: call.url,
+    method: call.method ?? "POST",
+    after: call.after === true,
     headers: call.headers,
     body: call.bodyBase64 !== undefined ? Buffer.from(call.bodyBase64, "base64") : call.body,
     response: call.responseBase64 !== undefined ? Buffer.from(call.responseBase64, "base64") : call.response,
@@ -63,20 +67,27 @@ async function run(fixture, testMode = false) {
   });
 
   const responses = [];
-  for (const call of calls(fixture)) {
+  for (const call of calls(fixture).filter((call) => !call.after)) {
     // "bodyAs": "blob" or "gzip" sends the body as bytes, the way Claude's JSON route does.
     responses.push(
       await (fixture.bodyAs === "gzip"
         ? window.fetch(call.url, { method: "POST", headers: call.headers, body: new Uint8Array(require("zlib").gzipSync(call.body)) })
         : fixture.bodyAs === "blob"
         ? window.fetch(call.url, { method: "POST", headers: call.headers, body: new Blob([call.body]) })
-        : window.fetch(new Request(call.url, { method: "POST", headers: call.headers, body: call.body })))
+        : window.fetch(new Request(call.url, { method: call.method, headers: call.headers, body: call.body })))
     );
   }
   allSent();
   await Promise.all(responses.map((response) => response.arrayBuffer())); // the site reads its answers
-  for (let i = 0; i < 50 && measures.length === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
-  return measures[0];
+  const settle = async (count) => {
+    for (let i = 0; i < 50 && measures.length < count; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+  };
+  await settle(1);
+  for (const call of calls(fixture).filter((call) => call.after)) {
+    await (await window.fetch(new Request(call.url, { method: call.method, headers: call.headers }))).arrayBuffer();
+  }
+  await settle(fixture.measures ?? 1);
+  return measures;
 }
 
 (async () => {
@@ -84,7 +95,7 @@ async function run(fixture, testMode = false) {
   for (const file of fs.readdirSync(`${__dirname}/fixtures`).filter((name) => name.endsWith(".json"))) {
     const fixture = JSON.parse(fs.readFileSync(`${__dirname}/fixtures/${file}`, "utf8"));
     const { sentText, answer, attachedTokens = 0, ...expected } = fixture.expect;
-    const measure = await run(fixture);
+    const measure = (await run(fixture)).at(-1);
     const actual = measure && {
       provider: measure.provider,
       model: measure.model,
@@ -103,7 +114,7 @@ async function run(fixture, testMode = false) {
     }
     // Test mode: the same exchange carries the shape of its request, and the
     // message never appears in it.
-    const tested = await run(fixture, true);
+    const [tested] = await run(fixture, true);
     const shape = JSON.stringify(tested?.shape ?? null);
     if (!tested?.shape || (sentText && shape.includes(JSON.stringify(sentText).slice(1, -1)))) {
       throw new Error(`${file}: test mode shape missing or holding the message: ${shape.slice(0, 300)}`);

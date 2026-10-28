@@ -547,6 +547,77 @@
 
   const ADAPTERS = [CHATGPT, CLAUDE, CLAUDE_REST, GEMINI, MISTRAL];
 
+  // --- ChatGPT answers that come later ----------------------------------------
+  //
+  // Seen on 2026-10-28 with gpt-6-pro: the send's stream ends without an
+  // answer, and the page then reads the conversation again
+  // (GET /backend-api/conversations/<id>) until the answer is there. That
+  // read is where the answer is counted, once, as the end of the send.
+  // shortcut: the shape of that read was never captured; mapping, children and end_turn are ChatGPT's long-standing conversation format, check it in a test report.
+  const awaitingAnswer = new Map(); // message the answer follows -> { conversation, since }
+
+  const answerLaterRoute = (url, method) =>
+    method === "GET" && /\/backend-api\/conversations?\/[0-9a-f-]{20,}(\?|$)/.test(url);
+
+  function waitForAnswer(sent, conversation, since) {
+    // "Try again" sends no message: its answer follows the parent.
+    const after = sent?.messages?.[0]?.id ?? sent?.parent_message_id;
+    if (!after || !conversation) return;
+    awaitingAnswer.set(after, { conversation, since });
+    if (awaitingAnswer.size > 20) awaitingAnswer.delete(awaitingAnswer.keys().next().value);
+  }
+
+  async function readLaterAnswer(response) {
+    const read = await response.json();
+    if (testMode()) reportTest({ provider: "chatgpt", kind: "answer", shape: { answer: answerShape(read) } });
+    const mapping = read?.mapping;
+    if (!mapping) return;
+    for (const [after, { conversation, since }] of awaitingAnswer) {
+      // The answer may come after reasoning or tool steps: walk down from the
+      // message it follows, keeping only what was written after the send.
+      let text = "";
+      let finished = false;
+      let model = "unknown";
+      const queue = [...(mapping[after]?.children ?? [])];
+      while (queue.length > 0) {
+        const node = mapping[queue.shift()];
+        queue.push(...(node?.children ?? []));
+        const message = node?.message;
+        if (message?.author?.role !== "assistant" || message.content?.content_type !== "text") continue;
+        if (typeof message.create_time === "number" && message.create_time < since - 5) continue;
+        text += (message.content.parts ?? []).filter((part) => typeof part === "string").join("");
+        finished ||= message.end_turn === true;
+        model = message.metadata?.model_slug ?? model;
+      }
+      if (!finished) continue;
+      awaitingAnswer.delete(after);
+      report({
+        provider: "chatgpt",
+        model,
+        conversation,
+        firstTurn: false,
+        tokensSent: 0,
+        tokensReceived: estimateTokens(text),
+        justThanks: false,
+        followUpFix: false,
+        deep: null,
+        regenerated: false,
+        continued: true,
+      });
+    }
+  }
+
+  // Test mode: the shape of a conversation read, with no text at all, only
+  // the few fields that name a role, a status or a model.
+  const ANSWER_KEYS = new Set(["role", "status", "content_type", "model_slug", "recipient", "channel", "type", "finish_type"]);
+  function answerShape(value, key = "", depth = 0) {
+    if (typeof value === "string") return ANSWER_KEYS.has(key) && TOKEN.test(value) ? value : `<${value.length} chars>`;
+    if (value === null || typeof value !== "object") return value;
+    if (depth > 8) return "<deeper>";
+    if (Array.isArray(value)) return value.slice(0, 20).map((item) => answerShape(item, key, depth + 1));
+    return Object.fromEntries(Object.entries(value).slice(0, 40).map(([name, item]) => [name, answerShape(item, name, depth + 1)]));
+  }
+
   // --- Reading the stream ----------------------------------------------------
 
   // Trap hit on 2026-10-22: after "[DONE]", ChatGPT aborts the request
@@ -682,13 +753,14 @@
 
   window.fetch = async function (input, options) {
     let adapter = null;
+    let method = "";
     let url = "";
     let requestCopy = null;
     let headers = null;
 
     try {
       url = typeof input === "string" ? input : input instanceof URL ? input.href : input?.url ?? "";
-      const method = (options?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+      method = (options?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
 
       adapter = ADAPTERS.find((candidate) => candidate.matches(url, method)) ?? null;
       if (adapter && input instanceof Request) requestCopy = input.clone();
@@ -716,6 +788,13 @@
     }
 
     const response = await originalFetch.apply(this, arguments);
+    if (!adapter && awaitingAnswer.size > 0 && response.ok && answerLaterRoute(url, method)) {
+      try {
+        readLaterAnswer(response.clone()).catch(() => {});
+      } catch (error) {
+        // Same rule as everywhere here: the page first.
+      }
+    }
     if (!adapter || !response.body || !response.ok) return response;
 
     try {
@@ -738,12 +817,14 @@
 
   // Deliberately not awaited: counting must not delay the answer on the page.
   async function measure(adapter, url, requestCopy, options, headers, stream) {
+    const sentAt = Date.now() / 1000;
     try {
       const sent = await readSentBody(adapter, requestCopy, options);
       if (diagnostic()) console.log("[optidome] sent", sent);
 
       const { text, conversation } = await readStream(stream, adapter);
       const message = adapter.sentMessage(sent);
+      if (adapter === CHATGPT && !text) waitForAnswer(sent, adapter.conversation(sent, url) ?? conversation, sentAt);
 
       report({
         provider: adapter.name,

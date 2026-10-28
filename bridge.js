@@ -79,7 +79,7 @@ window.addEventListener("message", (event) => {
     send({
       source: "optidome-test",
       provider: measure.provider,
-      kind: measure.kind === "route" ? "route" : "action",
+      kind: ["route", "answer"].includes(measure.kind) ? measure.kind : "action",
       route: typeof measure.route === "string" ? measure.route.slice(0, 200) : undefined,
       shape: measure.shape,
     });
