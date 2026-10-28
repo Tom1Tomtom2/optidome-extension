@@ -1,5 +1,6 @@
 {
-  "seen": "Rebuilt, not captured: route seen in a test mode report of 2026-10-28 (signed in), stream in the shape of Anthropic's API. Replace with a real capture.",
+  "seen": "Rebuilt, not captured: route seen in a test mode report of 2026-10-28 (signed in), stream in the shape of Anthropic's API. Replace with a real capture. The body goes as a Blob, like the real site (test mode report of 2026-10-28: request read as null when it was a string only).",
+  "bodyAs": "blob",
   "url": "https://claude.ai/api/organizations/00000000-0000-0000-0000-000000000000/chat_conversations/11267a5a-d2af-4e80-9570-6f21280f4f0d/completion",
   "headers": {
     "content-type": "application/json"

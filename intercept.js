@@ -579,7 +579,12 @@
 
   async function readSentBody(adapter, requestCopy, options) {
     try {
-      const body = typeof options?.body === "string" ? options.body : requestCopy ? await requestCopy.text() : null;
+      // Trap of 2026-10-28: Claude's JSON route sends its body as binary, not
+      // a string. Blobs and buffers are read from a copy; a ReadableStream
+      // would be used up, so it is left alone.
+      const raw = options?.body;
+      const binary = raw instanceof Blob || raw instanceof ArrayBuffer || ArrayBuffer.isView(raw);
+      const body = typeof raw === "string" ? raw : binary ? await new Response(raw).text() : requestCopy ? await requestCopy.text() : null;
       if (body != null) return (adapter.parseSent ?? JSON.parse)(body);
     } catch (error) {
       // No body, or not in the expected shape.
@@ -681,7 +686,14 @@
         // read" is not "no". The test mode shows the difference.
         deep: adapter.deep ? adapter.deep(sent) === true : null,
         regenerated: adapter.regenerated ? adapter.regenerated(sent, url) === true : null,
-        shape: testMode() ? { request: shape(sent, message), headers: adapter.headerShape?.(headers, message) } : undefined,
+        shape: testMode()
+          ? {
+              request: shape(sent, message),
+              headers: adapter.headerShape?.(headers, message),
+              // A body still unread: say what kind it was, to read it next time.
+              body: sent ? undefined : Object.prototype.toString.call(options?.body ?? requestCopy),
+            }
+          : undefined,
       });
     } catch (error) {
       if (diagnostic()) console.warn("[optidome] measure failed", error);

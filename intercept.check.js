@@ -28,7 +28,7 @@ async function run(fixture, testMode = false) {
     // The site's own fetch: answers with the captured response, once every
     // call has gone out (Claude's answer stream is opened before the send).
     fetch: async (input) => {
-      const { response } = calls(fixture).find((call) => call.url === input.url) ?? {};
+      const { response } = calls(fixture).find((call) => call.url === (input.url ?? input)) ?? {};
       const stream = new ReadableStream({
         async start(controller) {
           await sent;
@@ -49,6 +49,7 @@ async function run(fixture, testMode = false) {
     location: { href: "https://example.test/" },
     Request,
     Response,
+    Blob,
     Headers,
     URL,
     DataView,
@@ -62,7 +63,12 @@ async function run(fixture, testMode = false) {
 
   const responses = [];
   for (const call of calls(fixture)) {
-    responses.push(await window.fetch(new Request(call.url, { method: "POST", headers: call.headers, body: call.body })));
+    // "bodyAs": "blob" sends the body the way Claude's JSON route does.
+    responses.push(
+      await (fixture.bodyAs === "blob"
+        ? window.fetch(call.url, { method: "POST", headers: call.headers, body: new Blob([call.body]) })
+        : window.fetch(new Request(call.url, { method: "POST", headers: call.headers, body: call.body })))
+    );
   }
   allSent();
   await Promise.all(responses.map((response) => response.arrayBuffer())); // the site reads its answers
