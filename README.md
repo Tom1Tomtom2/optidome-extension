@@ -39,7 +39,7 @@ the extension does not read it yet, the tip stays silent rather than guess:
 
 | | ChatGPT | Claude | Gemini | Mistral |
 |---|---|---|---|---|
-| deep reasoning on | read | not yet | not yet | read |
+| deep reasoning on | read | not yet | read | read |
 | answer redone | read | not yet | not yet | read |
 
 The test mode below is how the missing ones get filled in.

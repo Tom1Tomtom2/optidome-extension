@@ -452,6 +452,10 @@
         return "unknown";
       }
     },
+    // Seen on 2026-10-28, signed in (test mode): [96] is 1 in the Thinking
+    // and Pro modes, 0 in Fast. [79] numbers the mode (1 Fast, 5 Thinking,
+    // 3 Pro) and the header carries a code per model, both likely to change.
+    deep: (sent) => sent?.[96] === 1,
     // Test mode: the header that carries the mode, signed in it may say more.
     headerShape: (headers, message) => {
       try {
